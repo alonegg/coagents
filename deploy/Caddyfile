@@ -1,0 +1,10 @@
+{$COAGENTS_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8787
+	log {
+		output file /var/log/caddy/coagents-access.log {
+			roll_size 20MiB
+			roll_keep 5
+		}
+	}
+}

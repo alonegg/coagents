@@ -12,6 +12,12 @@ export const ErrorCode = z.enum([
   "decision_already_superseded",
   "project_not_bound",
   "project_archived",
+  "rate_limited",
+  "csrf_failed",
+  "username_taken",
+  "invitation_invalid",
+  "already_member",
+  "not_allowed",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 

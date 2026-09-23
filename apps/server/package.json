@@ -3,15 +3,19 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": { "coagents-server": "./dist/main.js" },
+  "bin": {
+    "coagents-server": "./dist/main.js"
+  },
   "scripts": {
     "start": "node dist/main.js"
   },
   "dependencies": {
     "@coagents/contract": "workspace:*",
     "@hono/node-server": "^2.1.1",
+    "@node-rs/argon2": "^2.2.1",
     "better-sqlite3": "^13.0.3",
-    "hono": "^4.13.8"
+    "hono": "^4.13.8",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0"

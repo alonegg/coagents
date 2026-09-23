@@ -1,0 +1,43 @@
+:root {
+  --bg: #f7f7f5;
+  --fg: #1d1d1b;
+  --muted: #6b6b66;
+  --line: #deded8;
+  --card: #ffffff;
+  --accent: #2f5d8a;
+  --danger: #a33a2c;
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif;
+  line-height: 1.55;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #161615; --fg: #ececea; --muted: #9a9a94; --line: #34342f; --card: #1f1f1d; --accent: #7fb0e0; --danger: #e0806f; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); }
+.shell { max-width: 960px; margin: 0 auto; padding: 16px; }
+.narrow { max-width: 440px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 12px; margin-bottom: 16px; }
+.topbar nav { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.brand { font-weight: 700; color: var(--fg); text-decoration: none; }
+a { color: var(--accent); }
+h1 { font-size: 1.5rem; } h2 { font-size: 1.15rem; margin-top: 2rem; }
+.muted { color: var(--muted); }
+.error { color: var(--danger); }
+.notice { padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--card); }
+.stack { display: grid; gap: 12px; max-width: 440px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+label { display: grid; gap: 4px; font-size: 0.9rem; }
+input, textarea, select, button { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); }
+button { cursor: pointer; background: var(--accent); color: #fff; border-color: var(--accent); }
+button:disabled { opacity: 0.6; }
+button.link { background: none; border: none; color: var(--accent); padding: 0 4px; }
+button.danger, .danger { color: var(--danger); }
+.cards { list-style: none; padding: 0; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.card { display: block; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); text-decoration: none; }
+.card p { margin: 6px 0; }
+.badge { display: inline-block; margin-left: 8px; padding: 1px 8px; font-size: 0.75rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-weight: normal; vertical-align: middle; }
+.panel { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); margin: 12px 0; }
+.copy { display: block; overflow-wrap: anywhere; user-select: all; padding: 8px; background: var(--bg); border-radius: 4px; }
+table { width: 100%; border-collapse: collapse; display: block; overflow-x: auto; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }

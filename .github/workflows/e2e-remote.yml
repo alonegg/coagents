@@ -1,0 +1,31 @@
+name: E2E remote (machine B)
+
+# Runs acceptance steps against the deployed hub from a GitHub-hosted runner,
+# which is an independent machine on a different network from the developer's.
+on:
+  workflow_dispatch:
+    inputs:
+      milestone:
+        description: Acceptance script to run (e.g. m1)
+        required: true
+      phase:
+        description: Phase to run on this machine
+        required: true
+        default: join
+
+jobs:
+  run:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: node scripts/e2e/${{ inputs.milestone }}.mjs ${{ inputs.phase }}
+        env:
+          COAGENTS_HUB: ${{ secrets.COAGENTS_HUB }}
+          E2E_INVITES: ${{ secrets.E2E_INVITES }}
+          E2E_CONTRIB_USER: ${{ secrets.E2E_CONTRIB_USER }}
+          E2E_CONTRIB_PASSWORD: ${{ secrets.E2E_CONTRIB_PASSWORD }}
+          E2E_VIEWER_USER: ${{ secrets.E2E_VIEWER_USER }}
+          E2E_VIEWER_PASSWORD: ${{ secrets.E2E_VIEWER_PASSWORD }}

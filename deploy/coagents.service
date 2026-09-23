@@ -1,0 +1,29 @@
+[Unit]
+Description=CoAgents team service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=coagents
+Group=coagents
+EnvironmentFile=/etc/coagents/coagents.env
+WorkingDirectory=/opt/coagents/current
+ExecStart=/opt/coagents/node/bin/node /opt/coagents/current/apps/server/dist/main.js serve
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/coagents
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

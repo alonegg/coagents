@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Run server CLI commands (setup, reset-password) as the service user with the service environment.
+# Passwords are read from stdin.
+set -euo pipefail
+set -a; . /etc/coagents/coagents.env; set +a
+exec setpriv --reuid=coagents --regid=coagents --init-groups \
+  env COAGENTS_DATA_DIR="$COAGENTS_DATA_DIR" COAGENTS_PUBLIC_URL="$COAGENTS_PUBLIC_URL" \
+  /opt/coagents/node/bin/node /opt/coagents/current/apps/server/dist/main.js "$@"
