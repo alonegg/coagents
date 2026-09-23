@@ -8,7 +8,15 @@ export type Route =
   | { name: "project"; id: string; tab: ProjectTab; taskId?: string; artifactId?: string }
   | { name: "invite"; token: string }
   | { name: "devices" }
-  | { name: "device-code"; code: string };
+  | { name: "device-code"; code: string }
+  | { name: "home" }
+  | { name: "login" }
+  | { name: "apply" }
+  | { name: "account" }
+  | { name: "admin"; tab: AdminTab };
+
+export type AdminTab = "overview" | "registrations" | "users" | "projects" | "settings" | "audit";
+const ADMIN_TABS: readonly AdminTab[] = ["overview", "registrations", "users", "projects", "settings", "audit"];
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
@@ -20,6 +28,11 @@ export function parseHash(hash: string): Route {
   }
   if (parts[0] === "invite" && parts[1]) return { name: "invite", token: parts[1] };
   if (parts[0] === "devices") return { name: "devices" };
+  if (parts[0] === "login") return { name: "login" };
+  if (parts[0] === "apply") return { name: "apply" };
+  if (parts[0] === "account") return { name: "account" };
+  if (parts[0] === "admin") return { name: "admin", tab: ADMIN_TABS.includes(parts[1] as AdminTab) ? (parts[1] as AdminTab) : "overview" };
+  if (parts.length === 0) return { name: "home" };
   if (parts[0] === "device") return { name: "device-code", code: parts[1] ?? "" };
   return { name: "projects" };
 }

@@ -30,6 +30,7 @@ export const UserView = z.object({
   display_name: z.string(),
   timezone: z.string(),
   instance_role: z.enum(["maintainer", "member"]),
+  must_change_password: z.boolean().optional(),
 });
 export type UserView = z.infer<typeof UserView>;
 
@@ -166,3 +167,36 @@ export const AgentConnectionView = z.object({
   read_seq: z.number(),
 });
 export type AgentConnectionView = z.infer<typeof AgentConnectionView>;
+
+export const Email = z.email().max(200);
+
+export const ApplyInput = z
+  .object({
+    username: Username,
+    display_name: DisplayName,
+    password: Password,
+    timezone: TimeZone,
+    email: Email,
+    note: z.string().trim().min(1, "说明你是谁、为什么需要账号").max(1000),
+  })
+  .strict();
+
+export const ChangePasswordInput = z.object({ current_password: z.string().min(1).max(256), new_password: Password }).strict();
+
+export const RegistrationMode = z.enum(["approval", "closed"]);
+export type RegistrationMode = z.infer<typeof RegistrationMode>;
+
+export const InstanceSettingsInput = z
+  .object({
+    registration_mode: RegistrationMode.optional(),
+    site_name: z.string().trim().min(1).max(60).optional(),
+    announcement: z.string().max(1000).optional(),
+  })
+  .strict();
+
+export interface InstanceInfo {
+  site_name: string;
+  announcement: string;
+  registration_mode: RegistrationMode;
+  version: string;
+}

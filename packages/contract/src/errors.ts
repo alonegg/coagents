@@ -22,6 +22,10 @@ export const ErrorCode = z.enum([
   "expired_token",
   "handoff_blocked",
   "handoff_check_failed",
+  "registration_pending",
+  "registration_rejected",
+  "registration_closed",
+  "password_change_required",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 

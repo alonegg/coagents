@@ -5,6 +5,11 @@ import type { AppContext } from "./context.js";
 
 export const HEARTBEAT_MS = 15_000;
 
+let open = 0;
+export function openStreamCount(): number {
+  return open;
+}
+
 export interface StreamSpec<T> {
   topics: string[];
   // Re-checked before every delivery; false ends the stream with a "revoked" event.
@@ -23,6 +28,8 @@ export function sse<T>(c: Context, _ctx: AppContext, spec: StreamSpec<T>) {
   return streamSSE(c, async (stream) => {
     const abort = new AbortController();
     stream.onAbort(() => abort.abort());
+    open++;
+    try {
     let cursor = spec.cursor;
     await stream.writeSSE({ event: "ready", data: JSON.stringify({ cursor }) });
     while (!abort.signal.aborted) {
@@ -43,6 +50,9 @@ export function sse<T>(c: Context, _ctx: AppContext, spec: StreamSpec<T>) {
       await waitForWake(spec.topics, HEARTBEAT_MS, abort.signal);
     }
     await stream.close();
+    } finally {
+      open--;
+    }
   });
 }
 

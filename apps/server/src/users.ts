@@ -3,7 +3,8 @@ import { nowIso, type AppContext } from "./context.js";
 import { HttpError } from "./http-error.js";
 import { wakeAuthChanged } from "./bus.js";
 import { newId } from "./ids.js";
-import { hashPassword } from "./passwords.js";
+import { randomBytes } from "node:crypto";
+import { hashPassword, verifyPassword } from "./passwords.js";
 
 export interface NewUser {
   username: string;
@@ -13,7 +14,7 @@ export interface NewUser {
   instanceRole: "maintainer" | "member";
 }
 
-const USER_COLUMNS = "id, username, display_name, timezone, instance_role";
+const USER_COLUMNS = "id, username, display_name, timezone, instance_role, must_change_password = 1 AS must_change_password";
 
 export async function createUser(ctx: AppContext, u: NewUser): Promise<UserView> {
   const passwordHash = await hashPassword(u.password);
@@ -35,7 +36,8 @@ export async function createUser(ctx: AppContext, u: NewUser): Promise<UserView>
 }
 
 export function getUser(ctx: AppContext, id: string): UserView | undefined {
-  return ctx.db.prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`).get(id) as UserView | undefined;
+  const u = ctx.db.prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`).get(id) as (Omit<UserView, "must_change_password"> & { must_change_password: number }) | undefined;
+  return u && { ...u, must_change_password: u.must_change_password === 1 };
 }
 
 export function findUserForLogin(
@@ -79,4 +81,34 @@ export function disableUser(ctx: AppContext, username: string): UserView {
   })();
   wakeAuthChanged();
   return getUser(ctx, user.id)!;
+}
+
+// Users change their own password; every other session of theirs ends.
+export async function changeOwnPassword(ctx: AppContext, userId: string, keepSessionId: string, current: string, next: string): Promise<void> {
+  const row = ctx.db.prepare("SELECT password_hash FROM users WHERE id = ?").get(userId) as { password_hash: string };
+  if (!(await verifyPassword(row.password_hash, current))) throw new HttpError(403, "not_allowed", "Current password is wrong");
+  if (current === next) throw new HttpError(400, "invalid_input", "Choose a password different from the current one");
+  const hash = await hashPassword(next);
+  ctx.db.transaction(() => {
+    ctx.db.prepare("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?").run(hash, userId);
+    ctx.db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND id != ? AND revoked_at IS NULL").run(nowIso(ctx), userId, keepSessionId);
+  })();
+  wakeAuthChanged();
+}
+
+// A maintainer issues a one-time temporary password; the user must replace it at next sign-in.
+export async function issueTemporaryPassword(ctx: AppContext, userId: string): Promise<string> {
+  const temp = randomBytes(12).toString("base64url");
+  const hash = await hashPassword(temp);
+  const now = nowIso(ctx);
+  ctx.db.transaction(() => {
+    ctx.db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?").run(hash, userId);
+    ctx.db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").run(now, userId);
+  })();
+  wakeAuthChanged();
+  return temp;
+}
+
+export function enableUser(ctx: AppContext, userId: string): void {
+  ctx.db.prepare("UPDATE users SET auth_state = 'active' WHERE id = ?").run(userId);
 }

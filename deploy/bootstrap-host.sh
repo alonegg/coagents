@@ -12,6 +12,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -q build-essential python3 rsy
 id coagents >/dev/null 2>&1 || useradd --system --home /var/lib/coagents --shell /usr/sbin/nologin coagents
 install -d -o coagents -g coagents -m 0700 /var/lib/coagents
 install -d -m 0755 /opt/coagents /opt/coagents/releases /etc/coagents
+install -d -o root -g coagents -m 0750 /var/backups/coagents
 
 # Pinned Node.js for the service, independent of any system node.
 if [[ "$(/opt/coagents/node/bin/node -v 2>/dev/null)" != "v${NODE_VERSION}" ]]; then
@@ -30,6 +31,7 @@ COAGENTS_PUBLIC_URL=https://${DOMAIN}
 COAGENTS_HOST=127.0.0.1
 COAGENTS_PORT=8787
 COAGENTS_HUB_DIR=/opt/coagents/current/apps/hub/dist
+COAGENTS_BACKUP_DIR=/var/backups/coagents
 ENV
   chmod 0644 /etc/coagents/coagents.env
 fi

@@ -359,6 +359,30 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE projects ADD COLUMN deleted_by TEXT REFERENCES users(id);
   CREATE INDEX events_by_seq_project ON events(seq DESC, project_id);
   `,
+  `
+  ALTER TABLE users ADD COLUMN email TEXT;
+  ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN last_login_at TEXT;
+
+  -- Self-service applications. A user row exists only after a maintainer approves.
+  CREATE TABLE registrations (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    note TEXT NOT NULL,
+    timezone TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'rejected')),
+    created_at TEXT NOT NULL,
+    decided_by TEXT REFERENCES users(id),
+    decided_at TEXT,
+    decision_note TEXT,
+    user_id TEXT REFERENCES users(id)
+  ) STRICT;
+  CREATE UNIQUE INDEX one_pending_registration_per_username ON registrations(username) WHERE status = 'pending';
+  CREATE INDEX registrations_by_status ON registrations(status, created_at);
+  `,
 ];
 
 export function openDb(path: string): Db {

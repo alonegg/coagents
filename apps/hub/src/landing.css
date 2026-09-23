@@ -1,0 +1,49 @@
+.landing { --l-max: 1080px; color: var(--fg); background: var(--bg); }
+.landing a { color: var(--accent); }
+.l-nav, .l-hero, .l-section, .l-footer, .l-announce { max-width: var(--l-max); margin: 0 auto; padding-left: 16px; padding-right: 16px; }
+.l-nav { display: flex; justify-content: space-between; align-items: center; padding-top: 18px; padding-bottom: 18px; gap: 12px; }
+.l-nav .brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--fg); text-decoration: none; }
+.l-nav nav { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.l-nav nav a { text-decoration: none; }
+.l-announce { padding: 10px 16px; border-left: 3px solid var(--accent); background: var(--card); }
+.l-hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 48px; align-items: center; padding-top: 56px; padding-bottom: 72px; }
+.l-eyebrow { color: var(--muted); letter-spacing: 0.08em; font-size: 0.85rem; margin: 0 0 12px; }
+.l-hero h1 { font-size: clamp(1.9rem, 4vw, 2.9rem); line-height: 1.25; margin: 0 0 18px; letter-spacing: -0.01em; }
+.l-lead { font-size: 1.08rem; color: var(--muted); max-width: 36em; }
+.l-cta { display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; align-items: center; }
+.l-btn { display: inline-block; padding: 11px 20px; border-radius: 8px; background: var(--accent); color: #fff !important; text-decoration: none; font-weight: 600; border: 1px solid var(--accent); }
+.l-btn.ghost { background: transparent; color: var(--accent) !important; }
+.l-btn.small { padding: 6px 12px; font-size: 0.9rem; }
+.l-muted { color: var(--muted); }
+.l-board { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: 0 20px 50px rgb(0 0 0 / 0.08); }
+.l-col h4 { margin: 0 0 8px; font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+.l-card { padding: 9px 10px; margin-bottom: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-size: 0.86rem; }
+.l-card small { display: block; color: var(--muted); font-size: 0.74rem; margin-top: 3px; }
+.l-card.agent { border-left: 3px solid var(--accent); }
+.l-feed { grid-column: 1 / -1; border-top: 1px dashed var(--line); padding-top: 10px; font-size: 0.8rem; color: var(--muted); }
+.l-feed p { margin: 4px 0; }
+.l-section { padding-top: 40px; padding-bottom: 40px; border-top: 1px solid var(--line); }
+.l-section h2 { font-size: 1.5rem; margin: 0 0 24px; }
+.l-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.l-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.l-tile { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.l-tile h3 { margin: 0 0 8px; font-size: 1.02rem; }
+.l-tile p { margin: 0 0 8px; color: var(--muted); font-size: 0.93rem; }
+.l-steps { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 18px; }
+.l-steps li { display: flex; gap: 16px; align-items: flex-start; }
+.l-steps h3 { margin: 2px 0 6px; font-size: 1.05rem; }
+.l-steps p { margin: 0; color: var(--muted); }
+.l-num { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font-weight: 700; }
+.l-code { margin: 10px 0 0; padding: 12px 14px; border-radius: 8px; background: #1d1f24; color: #e8e8e3; font-size: 0.85rem; overflow-x: auto; }
+.l-bounds ul { margin: 0; padding-left: 1.2em; display: grid; gap: 8px; color: var(--muted); }
+.l-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 24px; padding-bottom: 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; }
+@media (max-width: 900px) {
+  .l-hero { grid-template-columns: 1fr; gap: 32px; padding-top: 32px; }
+  .l-grid4 { grid-template-columns: repeat(2, 1fr); }
+  .l-grid3 { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .l-grid4 { grid-template-columns: 1fr; }
+  .l-board { grid-template-columns: 1fr 1fr; }
+  .l-board .l-col:nth-child(3) { display: none; }
+}

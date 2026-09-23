@@ -1,6 +1,11 @@
 import type { ErrorBody } from "@coagents/contract";
 import { Hono } from "hono";
-import { csrfMiddleware, LoginLimiter, sessionMiddleware, type Env } from "./auth.js";
+import { csrfMiddleware, LoginLimiter, passwordChangeGate, sessionMiddleware, type Env } from "./auth.js";
+import { ApplyInput } from "@coagents/contract";
+import { settings } from "./instance.js";
+import { apply } from "./registrations.js";
+import { parseBody } from "./validate.js";
+import { adminRoutes } from "./routes/admin.js";
 import type { AppContext } from "./context.js";
 import { schemaVersion } from "./db.js";
 import { HttpError } from "./http-error.js";
@@ -49,6 +54,19 @@ export function createApi(ctx: AppContext): Hono<Env> {
   api.use("*", sessionMiddleware(ctx));
   api.use("*", agentMiddleware(ctx));
   api.use("*", csrfMiddleware(ctx));
+  api.use("*", passwordChangeGate());
+
+  // Public: what the landing page needs to know about this instance.
+  api.get("/instance", (c) => c.json({ ...settings(ctx), version: SERVER_VERSION }));
+
+  const applyLimiter = new LoginLimiter(5, 3600_000);
+  api.post("/registrations", async (c) => {
+    const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+    applyLimiter.check(ip, ctx.clock().getTime());
+    const input = await parseBody(c, ApplyInput);
+    applyLimiter.fail(ip, ctx.clock().getTime());
+    return c.json(await apply(ctx, input), 201);
+  });
 
   api.get("/health", (c) =>
     c.json({ status: "ok", version: SERVER_VERSION, schema_version: schemaVersion(ctx.db), ...(ctx.config.build ? { build: ctx.config.build } : {}) }),
@@ -63,6 +81,7 @@ export function createApi(ctx: AppContext): Hono<Env> {
   api.route("/devices", deviceRoutes(ctx));
   api.route("/notifications", notificationRoutes(ctx));
   api.route("/activity", activityRoutes(ctx));
+  api.route("/admin", adminRoutes(ctx));
   api.route("/", agentRoutes(ctx));
   return api;
 }

@@ -31,6 +31,7 @@ journalctl -u coagents -f                               # 服务日志
 ```bash
 printf '%s' "$PW" | coagents-admin setup --username <用户> --display-name <显示名> --timezone Asia/Shanghai   # 仅首次，实例已有用户时拒绝
 printf '%s' "$PW" | coagents-admin reset-password --username <用户>   # 重置密码并撤销其全部会话 # [待验证]
+# 日常的注册审批、停用、临时密码与维护者任命在 Hub 的"后台"完成（实例维护者可见）。
 coagents-admin disable-user --username <用户>                          # 停用账户，撤销会话与 Agent 连接
 coagents-admin reindex                                                 # 从受管成果重建全文索引 # [待验证]
 ```
@@ -42,12 +43,12 @@ Owner 忘记密码时，由实例维护者用 `reset-password` 恢复；项目�
 数据全部在 `/var/lib/coagents`（SQLite 数据库与 `files/` 下的成果文件）。2026-09-23 演练：停服 672 ms 完成打包；备份恢复到临时目录后以独立实例启动，健康检查正常，项目、任务、事件、成果版本、文件、用户、Agent 连接计数与线上逐项一致，文件 SHA-256 一致，重建索引 8/8 就绪。
 
 ```bash
-systemctl stop coagents && tar -C /var/lib -czf /root/coagents-backup-$(date +%Y%m%d%H%M%S).tgz coagents && systemctl start coagents
+systemctl stop coagents && tar -C /var/lib -czf /var/backups/coagents/coagents-backup-$(date +%Y%m%d%H%M%S).tgz coagents && systemctl start coagents
 # 原地恢复：
-systemctl stop coagents && mv /var/lib/coagents /var/lib/coagents.before-restore && tar -C /var/lib -xzf /root/coagents-backup-<时间>.tgz && chown -R coagents:coagents /var/lib/coagents && systemctl start coagents   # [待验证]
+systemctl stop coagents && mv /var/lib/coagents /var/lib/coagents.before-restore && tar -C /var/lib -xzf /var/backups/coagents/coagents-backup-<时间>.tgz && chown -R coagents:coagents /var/lib/coagents && systemctl start coagents   # [待验证]
 ```
 
-备份包含凭证哈希与全部成果，按敏感数据保管（主机上为 0600）。最近一次备份：`/root/coagents-backup-20260923234049.tgz`。
+备份放在 `/var/backups/coagents`（root:coagents 0750，文件 0640），后台"运行状态"显示最近一次备份时间。备份包含凭证哈希与全部成果，按敏感数据保管。
 
 ## 验收数据
 

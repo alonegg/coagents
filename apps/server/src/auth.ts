@@ -31,6 +31,7 @@ interface SessionRow {
   display_name: string;
   timezone: string;
   instance_role: "maintainer" | "member";
+  must_change_password: number;
 }
 
 // Resolves the browser session cookie. A session is valid only while the session, its device
@@ -45,7 +46,7 @@ export function sessionMiddleware(ctx: AppContext): MiddlewareHandler<Env> {
       const row = ctx.db
         .prepare(
           `SELECT s.id AS session_id, s.csrf_token, s.expires_at, d.id AS device_id, d.last_seen_at AS device_last_seen,
-                  u.id, u.username, u.display_name, u.timezone, u.instance_role
+                  u.id, u.username, u.display_name, u.timezone, u.instance_role, u.must_change_password
            FROM sessions s JOIN devices d ON d.id = s.device_id JOIN users u ON u.id = s.user_id
            WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at > ?
              AND d.revoked_at IS NULL AND u.auth_state = 'active'`,
@@ -59,6 +60,7 @@ export function sessionMiddleware(ctx: AppContext): MiddlewareHandler<Env> {
             display_name: row.display_name,
             timezone: row.timezone,
             instance_role: row.instance_role,
+            must_change_password: row.must_change_password === 1,
           },
           sessionId: row.session_id,
           deviceId: row.device_id,
@@ -195,4 +197,17 @@ export function sessionStillValid(ctx: AppContext, sessionId: string): boolean {
       )
       .get(sessionId, nowIso(ctx)) !== undefined
   );
+}
+
+// A session holding a temporary password may only change it (and read or end the session).
+export function passwordChangeGate(): MiddlewareHandler<Env> {
+  return async (c, next) => {
+    const auth = c.get("auth");
+    if (auth?.user.must_change_password) {
+      const p = c.req.path;
+      const allowed = p.endsWith("/session") || p.endsWith("/session/password") || p.endsWith("/health") || p.endsWith("/instance");
+      if (!allowed) throw new HttpError(403, "password_change_required", "Set a new password before continuing");
+    }
+    await next();
+  };
 }

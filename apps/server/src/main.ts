@@ -32,6 +32,7 @@ function context(): AppContext {
       leaseMinutes: Number(process.env.COAGENTS_LEASE_MINUTES ?? 30),
       filesDir: join(dataDir, "files"),
       ...(process.env.COAGENTS_BUILD ? { build: process.env.COAGENTS_BUILD } : {}),
+      ...(process.env.COAGENTS_BACKUP_DIR ? { backupDir: process.env.COAGENTS_BACKUP_DIR } : {}),
     },
   };
 }

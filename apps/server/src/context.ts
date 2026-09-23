@@ -11,6 +11,8 @@ export interface ServerConfig {
   filesDir: string;
   // Release id of the deployed Hub bundle, so open tabs can tell they are stale.
   build?: string;
+  // Where host backups land; shown as the last backup time in the admin overview.
+  backupDir?: string;
 }
 
 export interface AppContext {
