@@ -11,6 +11,7 @@ import { sessionRoutes } from "./routes/session.js";
 import { workRoutes } from "./routes/work.js";
 import { agentRoutes } from "./routes/agents.js";
 import { artifactRoutes } from "./routes/artifacts.js";
+import { handoffRoutes } from "./routes/handoffs.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { agentMiddleware } from "./agents.js";
 
@@ -52,6 +53,7 @@ export function createApi(ctx: AppContext): Hono<Env> {
   api.route("/projects", projectRoutes(ctx));
   api.route("/projects", workRoutes(ctx));
   api.route("/projects", artifactRoutes(ctx));
+  api.route("/projects", handoffRoutes(ctx));
   api.route("/invitations", invitationRoutes(ctx));
   api.route("/devices", deviceRoutes(ctx));
   api.route("/notifications", notificationRoutes(ctx));

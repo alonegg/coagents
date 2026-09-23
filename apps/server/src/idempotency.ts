@@ -33,3 +33,14 @@ export function purgeIdempotency(ctx: AppContext): number {
   const cutoff = new Date(ctx.clock().getTime() - RETENTION_MS).toISOString();
   return ctx.db.prepare("DELETE FROM idempotency WHERE created_at < ?").run(cutoff).changes;
 }
+
+// For writes whose preconditions must be recorded even when they fail: look up a stored result
+// first, then run the check outside the transaction, then the write through idempotent().
+export function priorResult(ctx: AppContext, actor: Actor, requestId: string, scope: string): StoredResult | undefined {
+  const prior = ctx.db
+    .prepare("SELECT scope, status, body FROM idempotency WHERE actor_key = ? AND request_id = ?")
+    .get(actorKey(actor), requestId) as { scope: string; status: 200 | 201; body: string } | undefined;
+  if (!prior) return undefined;
+  if (prior.scope !== scope) throw new HttpError(422, "invalid_input", "request_id was already used for a different request");
+  return { status: prior.status, body: JSON.parse(prior.body) as unknown };
+}

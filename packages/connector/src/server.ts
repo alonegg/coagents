@@ -2,6 +2,7 @@ import type { ClaimResult, EventPage, TaskView } from "@coagents/contract";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { inspectReceiver, inspectSender, isGitRepo } from "./git.js";
 import { ServiceClient, ServiceError } from "./service.js";
 import { forgetLease, recallLease, rememberLease, type Credential } from "./store.js";
 
@@ -20,7 +21,7 @@ export interface StreamStatus {
 }
 
 export type ConnectorState =
-  | { ok: true; credential: Credential; home: string; stream?: () => StreamStatus }
+  | { ok: true; credential: Credential; home: string; workdir?: string; stream?: () => StreamStatus }
   | { ok: false; message: string };
 
 function text(value: unknown): CallToolResult {
@@ -231,6 +232,63 @@ export function createConnectorServer(state?: ConnectorState): McpServer {
     "Publish the draft as the next immutable version, visible to the project (or to the restricted list an admin set). Publishing does not complete any task.",
     { artifact_id: z.string(), expected_revision: z.number().int().min(1) },
     async (args, svc, cred) => svc.call("POST", `${p(cred)}/artifacts/${args.artifact_id}/publish`, { expected_revision: args.expected_revision }),
+  );
+
+  tool(
+    "prepare_handoff",
+    "Hand a task you hold to someone else: what is done, what is next, risks, and where the material is. " +
+      "In a git working copy the Connector records repository, branch and commit (read-only); uncommitted or unpushed work is refused, deliver it first. " +
+      "Your lease ends and the task returns to todo.",
+    {
+      task_id: z.string(),
+      summary: z.string().min(1).max(20_000),
+      next_steps: z.string().min(1).max(20_000),
+      risks: z.string().max(20_000).optional(),
+      target_user_id: z.string().optional(),
+      include_git: z.boolean().optional(),
+      artifact_version_ids: z.array(z.string()).max(50).optional(),
+      lease_token: z.string().optional(),
+    },
+    async (args, svc, cred, home) => {
+      const dir = state.ok ? state.workdir ?? process.cwd() : process.cwd();
+      const useGit = args.include_git ?? (await isGitRepo(dir));
+      const res = await svc.call("POST", `${p(cred)}/tasks/${args.task_id}/handoffs`, {
+        lease_token: lease(home, cred, args.task_id, args.lease_token),
+        summary: args.summary,
+        next_steps: args.next_steps,
+        ...(args.risks ? { risks: args.risks } : {}),
+        ...(args.target_user_id ? { target_user_id: args.target_user_id } : {}),
+        ...(useGit ? { git: await inspectSender(dir) } : {}),
+        artifact_version_ids: args.artifact_version_ids ?? [],
+      });
+      forgetLease(home, cred.client_id, args.task_id);
+      return res;
+    },
+  );
+
+  tool(
+    "list_handoffs",
+    "List handoffs in the project (default: pending ones), with the sender's notes, git commit and artifact versions.",
+    { state: z.enum(["pending", "accepted", "cancelled"]).optional(), task_id: z.string().optional() },
+    async (args, svc, cred) => {
+      const q = new URLSearchParams({ state: args.state ?? "pending", ...(args.task_id ? { task_id: args.task_id } : {}) });
+      return { notice: UNTRUSTED_NOTICE, ...(await svc.call<object>("GET", `${p(cred)}/handoffs?${q.toString()}`)) };
+    },
+  );
+
+  tool(
+    "accept_handoff",
+    "Take over a handed-off task. For code handoffs the Connector checks this working copy read-only (same repository, commit present); " +
+      "if the commit is missing it reports what to fetch and changes nothing. On success you get a fresh lease.",
+    { handoff_id: z.string() },
+    async (args, svc, cred, home) => {
+      const h = await svc.call<{ task_id: string; git: { commit: string } | null }>("GET", `${p(cred)}/handoffs/${args.handoff_id}`);
+      const dir = state.ok ? state.workdir ?? process.cwd() : process.cwd();
+      const check = h.git ? await inspectReceiver(dir, h.git.commit) : undefined;
+      const res = await svc.call<{ lease_token: string; lease_until: string; handoff: unknown }>("POST", `${p(cred)}/handoffs/${args.handoff_id}/accept`, check ? { check } : {});
+      rememberLease(home, cred.client_id, h.task_id, res.lease_token);
+      return { handoff: res.handoff, lease_until: res.lease_until, local_check: check ?? null };
+    },
   );
 
   return server;

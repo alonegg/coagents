@@ -33,7 +33,7 @@ const versionConflict = () =>
 const leaseInvalid = () =>
   new HttpError(409, "lease_invalid", "You do not hold a valid lease on this task; claim it again");
 
-function loadRow(ctx: AppContext, projectId: string, taskId: string): TaskRow {
+export function loadRow(ctx: AppContext, projectId: string, taskId: string): TaskRow {
   const row = ctx.db.prepare(`${SELECT_TASK} WHERE t.id = ? AND t.project_id = ?`).get(taskId, projectId) as TaskRow | undefined;
   if (!row) throw notFound();
   return row;
@@ -154,7 +154,7 @@ export function editTask(
 }
 
 // Clearing the holder always goes together with a status change and a version bump.
-function transition(ctx: AppContext, row: TaskRow, to: TaskStatus, clearLease: boolean): void {
+export function transition(ctx: AppContext, row: TaskRow, to: TaskStatus, clearLease: boolean): void {
   const res = ctx.db
     .prepare(
       `UPDATE tasks SET status = ?, version = version + 1, updated_at = ?
@@ -204,7 +204,7 @@ export function claimTask(ctx: AppContext, projectId: string, actor: Actor, task
 
 // Agents prove holding with the lease token; a person proves it with the session's user and device.
 // Either way the lease must still be active; a lapsed lease can never write again.
-function requireHolder(ctx: AppContext, row: TaskRow, actor: Actor, leaseToken: string | undefined): void {
+export function requireHolder(ctx: AppContext, row: TaskRow, actor: Actor, leaseToken: string | undefined): void {
   if (row.status !== "in_progress" || !leaseActive(row, nowIso(ctx))) throw leaseInvalid();
   const holderId = actor.kind === "client" ? actor.clientId : actor.userId;
   if (row.holder_kind !== actor.kind || row.holder_id !== holderId) throw leaseInvalid();

@@ -295,6 +295,31 @@ const MIGRATIONS: readonly string[] = [
     PRIMARY KEY (artifact_id, user_id)
   ) STRICT;
   `,
+  `
+  CREATE TABLE handoffs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    task_id TEXT NOT NULL REFERENCES tasks(id),
+    state TEXT NOT NULL CHECK (state IN ('pending', 'accepted', 'cancelled')),
+    from_holder_kind TEXT NOT NULL CHECK (from_holder_kind IN ('user', 'client')),
+    from_holder_id TEXT NOT NULL,
+    from_user_id TEXT NOT NULL REFERENCES users(id),
+    from_device_id TEXT NOT NULL REFERENCES devices(id),
+    target_user_id TEXT REFERENCES users(id),
+    summary TEXT NOT NULL,
+    next_steps TEXT NOT NULL,
+    risks TEXT,
+    git TEXT,
+    artifact_version_ids TEXT NOT NULL,
+    last_check TEXT,
+    created_at TEXT NOT NULL,
+    accepted_at TEXT,
+    accepted_by TEXT REFERENCES users(id),
+    cancelled_at TEXT
+  ) STRICT;
+  CREATE INDEX handoffs_by_task ON handoffs(task_id, created_at);
+  CREATE UNIQUE INDEX one_pending_handoff_per_task ON handoffs(task_id) WHERE state = 'pending';
+  `,
 ];
 
 export function openDb(path: string): Db {

@@ -6,6 +6,9 @@ import { createInterface } from "node:readline/promises";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { applyInstall, diffLines, planInstall, removeInstall, type ConfigFormat, type McpEntry } from "./adapters/config-file.js";
 import { claudeCodeConfigPath, claudeCodeFormat } from "./adapters/claude-code.js";
+import { codexConfigPath, codexFormat } from "./adapters/codex.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { findProjectBinding } from "./binding.js";
 import { login } from "./login.js";
 import { ServiceClient } from "./service.js";
@@ -18,11 +21,15 @@ const USAGE = `coagents — CoAgents Connector
   coagents login --server <https://hub> --project <id> [--label <name>] [--read-only] [--dir <path>]
   coagents install claude-code [--dir <path>] [--yes]
   coagents uninstall claude-code [--dir <path>] [--keep-credential]
+  coagents install codex [--yes]           (writes ~/.codex/config.toml)
+  coagents uninstall codex
   coagents status [--dir <path>]
+  coagents tool <name> [json-args] [--dir <path>]   Call one MCP tool and print the result
   coagents mcp            Run the stdio MCP server (what the client launches)`;
 
 const ADAPTERS: Record<string, { format: ConfigFormat; path: (dir: string) => string }> = {
   "claude-code": { format: claudeCodeFormat, path: claudeCodeConfigPath },
+  codex: { format: codexFormat, path: () => codexConfigPath() },
 };
 
 const say = (line: string) => process.stderr.write(`${line}\n`);
@@ -43,7 +50,8 @@ function state(dir: string): ConnectorState {
   const home = coagentsHome();
   const credential = loadCredential(home, b.binding.server, b.binding.project_id);
   if (!credential) return { ok: false, message: `No credential for project ${b.binding.project_id} on this device; run \`coagents login\`.` };
-  return { ok: true, credential, home };
+  // Git checks run in the bound project's root: the directory that holds .coagents/.
+  return { ok: true, credential, home, workdir: dirname(dirname(b.path)) };
 }
 
 async function confirm(question: string): Promise<boolean> {
@@ -145,6 +153,19 @@ async function main(): Promise<void> {
         deleteCredential(s.home, s.credential.server, s.credential.project_id);
         say(`Revoked and deleted the agent credential ${s.credential.client_id}.`);
       }
+      return;
+    }
+    case "tool": {
+      const [name, json] = positionals;
+      if (!name) throw new Error("tool needs a tool name");
+      const [a, b] = InMemoryTransport.createLinkedPair();
+      await createConnectorServer(state(dir)).connect(b);
+      const client = new Client({ name: "coagents-cli", version: "0.1.0" });
+      await client.connect(a);
+      const res = (await client.callTool({ name, arguments: json ? (JSON.parse(json) as Record<string, unknown>) : {} })) as { isError?: boolean; content: { text: string }[] };
+      process.stdout.write(`${res.content[0]?.text ?? ""}\n`);
+      await client.close();
+      process.exitCode = res.isError ? 1 : 0;
       return;
     }
     case "status": {

@@ -15,6 +15,19 @@ interface Submission {
 
 type Detail = TaskView & { submissions: Submission[] };
 
+interface Handoff {
+  id: string;
+  state: "pending" | "accepted" | "cancelled";
+  from: { display_name: string; holder_kind: string };
+  target_user_id: string | null;
+  summary: string;
+  next_steps: string;
+  risks: string | null;
+  git: { repo_identity: string; branch: string; commit: string } | null;
+  last_check: { ok: boolean; reasons: string[]; warnings: string[]; checked_at: string } | null;
+  created_at: string;
+}
+
 export function TaskDetail({
   project,
   session,
@@ -33,12 +46,14 @@ export function TaskDetail({
   const [text, setText] = useState("");
   const [evidence, setEvidence] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
+  const [handoffs, setHandoffs] = useState<Handoff[]>([]);
   const [published, setPublished] = useState<{ versionId: string; label: string }[]>([]);
 
   const base = `/projects/${project.id}/tasks/${taskId}`;
   const load = useCallback(() => {
     api<Detail>("GET", base).then(setTask, (e: ApiError) => setError(e.status === 404 ? "任务不存在或无权访问。" : e.message));
-  }, [base]);
+    api<{ handoffs: Handoff[] }>("GET", `/projects/${project.id}/handoffs?task_id=${taskId}`).then((r) => setHandoffs(r.handoffs), () => undefined);
+  }, [base, project.id, taskId]);
   useEffect(load, [load]);
   useEffect(() => {
     api<{ artifacts: { id: string; title: string; status: string; current_version: number | null }[] }>("GET", `/projects/${project.id}/artifacts`).then(async (r) => {
@@ -136,6 +151,31 @@ export function TaskDetail({
             {task.holder && !mine && <button disabled={!text} onClick={() => act(`${base}/terminate`, { expected_version: v, reason: text })}>终止租约</button>}
           </div>
         </div>
+      )}
+
+      {handoffs.length > 0 && (
+        <>
+          <h3>交接记录</h3>
+          <ul className="plain">
+            {handoffs.map((h) => (
+              <li key={h.id}>
+                <strong>{formatTime(h.created_at, tz)}</strong> · {h.from.display_name}（{h.from.holder_kind === "client" ? "Agent" : "人工"}）·{" "}
+                {{ pending: "待接手", accepted: "已接手", cancelled: "已取消" }[h.state]}
+                <p className="pre">已完成：{h.summary}</p>
+                <p className="pre">下一步：{h.next_steps}</p>
+                {h.risks && <p className="pre">风险：{h.risks}</p>}
+                {h.git && <p className="muted">代码：{h.git.repo_identity} · {h.git.branch} @ <code>{h.git.commit.slice(0, 12)}</code>（发送方 Connector 上报；未提交的代码不会随交接传输）</p>}
+                {h.last_check && (
+                  <p className={h.last_check.ok ? "muted" : "error"}>
+                    最近一次接手检查（{formatTime(h.last_check.checked_at, tz)}）：{h.last_check.ok ? "通过" : `未通过：${h.last_check.reasons.join("；")}`}
+                    {h.last_check.warnings.length > 0 && ` 提示：${h.last_check.warnings.join("；")}`}
+                  </p>
+                )}
+                {h.state === "pending" && h.git && <p className="muted">代码交接需在接收方工作副本所在设备，通过 Connector 的 accept_handoff 接手。</p>}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
       {task.submissions.length > 0 && (

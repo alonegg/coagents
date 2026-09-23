@@ -20,6 +20,8 @@ export const ErrorCode = z.enum([
   "not_allowed",
   "authorization_pending",
   "expired_token",
+  "handoff_blocked",
+  "handoff_check_failed",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 
