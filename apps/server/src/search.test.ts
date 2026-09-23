@@ -137,6 +137,15 @@ describe("full-text search", () => {
     expect(meta).toMatchObject({ title: "代码归档", index_state: "unsupported", matched_in: "title" });
   });
 
+  it("matches text whose ideographs came out of a PDF as compatibility characters", async () => {
+    const { env, pid, owner, zhou } = await setup();
+    // "沿⽤" and "引⼊" as extracted from a real Chrome-printed PDF (Kangxi radicals U+2F64, U+2F0A).
+    await publishMd(owner, pid, "附录", "数据同步沿\u2F64蓝鲸协议，不引\u2F0A新的消息队列。");
+    await drainIndexQueue(env.ctx);
+    expect((await search(zhou, pid, "沿用")).total).toBe(1);
+    expect((await search(zhou, pid, "引入")).total).toBe(1);
+  });
+
   it("rejects empty queries", async () => {
     const { pid, zhou } = await setup();
     expect((await zhou.json("GET", `/v1/projects/${pid}/search?q=%20`)).status).toBe(400);

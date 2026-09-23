@@ -101,18 +101,20 @@ async function indexVersion(ctx: AppContext, versionId: string): Promise<void> {
   let pages: number[] | null = null;
   let state: "ready" | "unsupported" = "ready";
   let error: string | null = null;
-  if (v.body !== null) text = v.body;
+  // Text is NFKC-normalized like queries are: PDF fonts often map ideographs to compatibility
+  // code points (e.g. Kangxi radical U+2F64 for 用), which would otherwise never match.
+  if (v.body !== null) text = v.body.normalize("NFKC");
   else if (v.url !== null) {
     state = "unsupported";
     error = "外部链接的正文不抓取，只能按标题和摘要检索";
   } else if (v.media_type === "text/markdown" || v.media_type === "text/plain") {
-    text = readFileSync(join(ctx.config.filesDir, v.storage_key!), "utf8");
+    text = readFileSync(join(ctx.config.filesDir, v.storage_key!), "utf8").normalize("NFKC");
   } else if (v.media_type === "application/pdf") {
     const perPage = await extractPdf(new Uint8Array(readFileSync(join(ctx.config.filesDir, v.storage_key!))));
     pages = [];
     for (const p of perPage) {
       pages.push(text.length);
-      text += `${p}\n`;
+      text += `${p.normalize("NFKC")}\n`;
     }
     if (!text.trim()) {
       state = "unsupported";
