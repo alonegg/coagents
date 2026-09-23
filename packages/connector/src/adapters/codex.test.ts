@@ -32,6 +32,11 @@ describe("codex config", () => {
     expect(readFileSync(path, "utf8")).toBe(EXISTING);
   });
 
+  it("leaves no trace when removing after other edits elsewhere in the file", () => {
+    const edited = codexFormat.add(EXISTING, entry)!.replace('model = "gpt-6-sol"', 'model = "gpt-5.5"');
+    expect(codexFormat.remove(edited, entry)).toBe(EXISTING.replace('model = "gpt-6-sol"', 'model = "gpt-5.5"'));
+  });
+
   it("removes only its own table (and subtables) when the file changed since install", () => {
     const withOurs = codexFormat.add(EXISTING, entry)!;
     const edited = `${withOurs.replace('command = "node"', 'command = "node20"')}\n[mcp_servers.coagents.env]\nX = "1"\n\n[later]\nk = 1\n`;

@@ -42,7 +42,12 @@ export const codexFormat: ConfigFormat = {
     const at = locate(current, entry.name);
     if (!at) return null;
     const lines = current.split("\n");
-    return [...lines.slice(0, at.start), ...lines.slice(at.end)].join("\n").replace(/\n{3,}$/, "\n");
+    // Also drop the blank separator line we put before the table.
+    const start = at.start > 0 && lines[at.start - 1] === "" ? at.start - 1 : at.start;
+    let end = at.end;
+    while (end < lines.length - 1 && lines[end] === "" && start < at.start) end++;
+    const out = [...lines.slice(0, start), ...lines.slice(end)].join("\n");
+    return out.endsWith("\n") || out === "" ? out : `${out}\n`;
   },
 };
 
