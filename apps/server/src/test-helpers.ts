@@ -18,7 +18,7 @@ export function testEnv(): TestEnv {
   const ctx: AppContext = {
     db: openDb(":memory:"),
     clock: () => new Date(now),
-    config: { publicUrl: PUBLIC_URL, sessionTtlHours: 24 },
+    config: { publicUrl: PUBLIC_URL, sessionTtlHours: 24, leaseMinutes: 30 },
   };
   return { ctx, app: createApp(ctx), advance: (ms) => void (now += ms) };
 }

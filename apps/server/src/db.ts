@@ -98,6 +98,93 @@ const MIGRATIONS: readonly string[] = [
   ) STRICT;
   CREATE INDEX audit_by_project ON audit_records(project_id, created_at);
   `,
+  `
+  CREATE TABLE tasks (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    acceptance_criteria TEXT NOT NULL,
+    assignee_id TEXT REFERENCES users(id),
+    status TEXT NOT NULL CHECK (status IN ('todo', 'in_progress', 'blocked', 'review', 'done')),
+    holder_kind TEXT CHECK (holder_kind IN ('user', 'client')),
+    holder_id TEXT,
+    holder_user_id TEXT REFERENCES users(id),
+    holder_device_id TEXT REFERENCES devices(id),
+    lease_token_hash TEXT,
+    lease_until TEXT,
+    milestone_id TEXT,
+    due_at TEXT,
+    version INTEGER NOT NULL,
+    created_by TEXT NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK ((holder_kind IS NULL) = (lease_until IS NULL))
+  ) STRICT;
+  CREATE INDEX tasks_by_project ON tasks(project_id, status);
+
+  CREATE TABLE task_submissions (
+    id TEXT PRIMARY KEY,
+    task_id TEXT NOT NULL REFERENCES tasks(id),
+    summary TEXT NOT NULL,
+    artifact_version_ids TEXT NOT NULL,
+    evidence TEXT,
+    submitted_by_user TEXT NOT NULL REFERENCES users(id),
+    submitted_by_client TEXT,
+    created_at TEXT NOT NULL,
+    outcome TEXT CHECK (outcome IN ('accepted', 'rejected')),
+    reviewed_by TEXT REFERENCES users(id),
+    review_note TEXT,
+    reviewed_at TEXT
+  ) STRICT;
+  CREATE INDEX submissions_by_task ON task_submissions(task_id, created_at);
+
+  CREATE TABLE events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    kind TEXT NOT NULL,
+    actor_user_id TEXT NOT NULL REFERENCES users(id),
+    actor_client_id TEXT,
+    actor_device_id TEXT,
+    subject_type TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    data TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX events_by_project ON events(project_id, seq);
+
+  CREATE TABLE decisions (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    event_seq INTEGER NOT NULL REFERENCES events(seq),
+    body TEXT NOT NULL,
+    supersedes_id TEXT UNIQUE REFERENCES decisions(id),
+    created_by TEXT NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL
+  ) STRICT;
+
+  CREATE TABLE cursors (
+    consumer_kind TEXT NOT NULL CHECK (consumer_kind IN ('device', 'client')),
+    consumer_id TEXT NOT NULL,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    last_seen_seq INTEGER NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (consumer_kind, consumer_id, project_id)
+  ) STRICT;
+
+  CREATE TABLE idempotency (
+    actor_key TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    status INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (actor_key, request_id)
+  ) STRICT;
+  CREATE INDEX idempotency_by_age ON idempotency(created_at);
+  `,
 ];
 
 export function openDb(path: string): Db {

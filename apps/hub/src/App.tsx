@@ -48,7 +48,7 @@ export function App() {
       </header>
       <main>
         {route.name === "projects" && <ProjectsPage session={session} />}
-        {route.name === "project" && <ProjectPage id={route.id} session={session} />}
+        {route.name === "project" && <ProjectPage route={route} session={session} />}
         {route.name === "devices" && <DevicesPage session={session} />}
       </main>
     </div>

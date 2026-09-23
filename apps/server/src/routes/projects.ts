@@ -9,7 +9,7 @@ import {
   type ProjectView,
 } from "@coagents/contract";
 import { Hono } from "hono";
-import { projectAccess, requirePermission, type ProjectAccess } from "../access.js";
+import { projectAccess, requireActive, requirePermission, type ProjectAccess } from "../access.js";
 import { audit } from "../audit.js";
 import { requireAuth, type Env } from "../auth.js";
 import { nowIso, type AppContext } from "../context.js";
@@ -18,12 +18,6 @@ import { hashSecret, newId, newSecret } from "../ids.js";
 import { parseBody } from "../validate.js";
 
 const PROJECT_COLUMNS = "p.id, p.name, p.description, p.lifecycle, p.timezone, m.role, p.created_at, p.updated_at";
-
-function requireActive(access: ProjectAccess): void {
-  if (access.lifecycle === "archived") {
-    throw new HttpError(409, "project_archived", "Project is archived; restore it to make changes");
-  }
-}
 
 function memberRole(ctx: AppContext, projectId: string, userId: string): ProjectRole | undefined {
   const row = ctx.db

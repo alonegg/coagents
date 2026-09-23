@@ -1,6 +1,6 @@
 import { roleAllows, type Permission, type ProjectRole } from "@coagents/contract";
 import type { AppContext } from "./context.js";
-import { notAllowed, notFound } from "./http-error.js";
+import { HttpError, notAllowed, notFound } from "./http-error.js";
 
 export interface ProjectAccess {
   projectId: string;
@@ -22,4 +22,10 @@ export function projectAccess(ctx: AppContext, userId: string, projectId: string
 
 export function requirePermission(access: ProjectAccess, permission: Permission): void {
   if (!roleAllows(access.role, permission)) throw notAllowed();
+}
+
+export function requireActive(access: ProjectAccess): void {
+  if (access.lifecycle === "archived") {
+    throw new HttpError(409, "project_archived", "Project is archived; restore it to make changes");
+  }
 }

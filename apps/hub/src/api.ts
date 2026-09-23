@@ -61,3 +61,15 @@ export const ROLE_LABEL: Record<string, string> = {
 export function formatTime(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(iso));
 }
+
+export function requestId(): string {
+  return `hub-${crypto.randomUUID()}`;
+}
+
+export const STATUS_LABEL: Record<string, string> = {
+  todo: "待办",
+  in_progress: "进行中",
+  blocked: "阻塞",
+  review: "待验收",
+  done: "已完成",
+};

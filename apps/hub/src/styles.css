@@ -41,3 +41,23 @@ button.danger, .danger { color: var(--danger); }
 .copy { display: block; overflow-wrap: anywhere; user-select: all; padding: 8px; background: var(--bg); border-radius: 4px; }
 table { width: 100%; border-collapse: collapse; display: block; overflow-x: auto; }
 th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 16px 0; overflow-x: auto; }
+.tabs a { padding: 8px 12px; text-decoration: none; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; }
+.tabs a[aria-current="page"] { color: var(--fg); border-bottom-color: var(--accent); }
+.board { display: grid; grid-template-columns: repeat(5, minmax(160px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 8px; }
+.column { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 8px; min-height: 120px; }
+.column h3 { font-size: 0.9rem; margin: 4px 4px 8px; }
+.task-card { display: grid; gap: 4px; padding: 8px 10px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); text-decoration: none; }
+.task-card.selected { border-color: var(--accent); }
+.warn { color: var(--danger); }
+.sync { font-size: 0.85rem; }
+.task-detail { margin-top: 16px; }
+.actions { display: grid; gap: 8px; margin: 12px 0; }
+.between { justify-content: space-between; align-items: center; }
+.pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.quote { border-left: 3px solid var(--line); padding-left: 8px; margin: 4px 0; }
+.plain { list-style: none; padding: 0; display: grid; gap: 12px; }
+.timeline { list-style: none; padding: 0; display: grid; gap: 10px; }
+.superseded { opacity: 0.6; }
+h2.first { margin-top: 0; }
+@media (max-width: 720px) { .board { grid-template-columns: repeat(5, 75vw); } }

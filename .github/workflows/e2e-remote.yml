@@ -26,6 +26,7 @@ jobs:
         env:
           COAGENTS_HUB: ${{ secrets.COAGENTS_HUB }}
           E2E_INVITES: ${{ secrets.E2E_INVITES }}
+          E2E_PAYLOAD: ${{ secrets.E2E_PAYLOAD }}
           E2E_CONTRIB_USER: ${{ secrets.E2E_CONTRIB_USER }}
           E2E_CONTRIB_PASSWORD: ${{ secrets.E2E_CONTRIB_PASSWORD }}
           E2E_VIEWER_USER: ${{ secrets.E2E_VIEWER_USER }}

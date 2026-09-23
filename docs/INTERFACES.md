@@ -31,6 +31,10 @@ MCP 工具不接收 `project_id`：Connector 启动时从工作目录的 `.coage
 
 所有写入都要求 `request_id`。任务状态只能经语义动作改变，不提供通用的改状态工具：`claim_task`（待办/阻塞 → 进行中）、`release_task`（进行中 → 待办）、带 `task_id` 的 `publish_blocker`（进行中 → 阻塞）、`submit_task`（进行中 → 待验收）；这些动作由持有者凭有效 `lease_token` 执行，成功后清理或发放租约并递增任务版本。不带 `task_id` 的阻塞只记录事件，不改变任务状态。编辑任务标题、说明、验收条件等字段使用 `expected_version`。接受/退回/重开为 Hub 中经人工会话授权的独立操作，不暴露为 Agent MCP 工具。Agent 不得借用户身份调用人工验收接口。
 
+持有证明：Agent 连接必须出示 `lease_token`。Hub 中由人认领的任务，以"同一用户 + 认领时的同一设备会话 + 租约未过期"作为持有证明，令牌可省略；换设备操作时仍需出示令牌。续租不改变任务版本、不产生业务事件。租约自然过期不移动卡片，但其他执行者可以认领该"进行中"任务。
+
+幂等：同一执行者（用户或 Agent 连接）的 `request_id` 首次成功写入后保存结果 24 小时，重试返回原结果（认领重试会返回原租约令牌）；同一 `request_id` 用于不同请求返回 422。失败的写入不保存，重试会按当前状态重新执行。
+
 ## 内部服务 API
 
 团队服务 API 经 HTTPS 供远程 Hub 和各设备 Connector 使用，不承诺为公开兼容协议。首版资源：`/v1/session`、`/v1/invitations`、`/v1/devices`、`/v1/projects`、`/v1/activity`、`/v1/notifications`；项目下提供 `activity`、`tasks`、`artifacts`、`members`、`agents`、`handoffs`、`milestones`、`search`。附件只能通过授权下载接口获取；全文片段在返回前执行同样授权。具体方法、schema 和认证方式由契约测试确认。
