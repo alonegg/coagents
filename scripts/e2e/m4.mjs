@@ -74,7 +74,6 @@ async function b() {
   await say(dev1, pid, "[m4] B ready");
   await new Promise((r) => setTimeout(r, 1000));
   // Wait until A has finished pinging (last pong sent), by watching our own pongs via the list API.
-  await waitFor(async () => false, 0, "noop").catch(() => {});
   for (;;) {
     const evs = (await dev1.expect(200, "GET", `/projects/${pid}/events?cursor=0&limit=200`)).events;
     if (evs.some((e) => bodyOf(e) === `[m4] pong ${PINGS - 1}`)) break;
@@ -112,10 +111,7 @@ async function b() {
   await new Promise((r) => setTimeout(r, 1500));
   const me2 = (await dev2.expect(200, "GET", "/devices")).devices.find((d) => d.current).id;
   const t0 = Date.now();
-  await dev1.expect(204, "DELETE", `/devices/${me2}`).catch(async () => {
-    const r = await dev1.call("DELETE", `/devices/${me2}`);
-    assert.equal(r.status, 204);
-  });
+  await dev1.expect(204, "DELETE", `/devices/${me2}`);
   await waitFor(() => d2Revoked, 5000, "revoked event on old stream");
   const revokeMs = Date.now() - t0;
   await say(dev1, pid, "[m4] after revoke");
