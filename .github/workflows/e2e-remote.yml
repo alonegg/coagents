@@ -27,7 +27,15 @@ jobs:
       # The Connector is built only for runs that act as an agent on this machine.
       - if: inputs.milestone == 'm6' || inputs.milestone == 'm9-clean'
         run: pnpm install --frozen-lockfile && pnpm -F @coagents/contract -F @coagents/connector exec tsc -b
-      - run: node scripts/e2e/${{ inputs.milestone }}.mjs ${{ inputs.phase }}
+      - if: inputs.milestone == 'load'
+        run: node scripts/load/capacity.mjs ${{ inputs.phase }}
+        env:
+          COAGENTS_HUB: ${{ secrets.COAGENTS_HUB }}
+          LOAD_STATE_JSON: ${{ secrets.E2E_PAYLOAD }}
+          E2E_OWNER_USER: unused
+          E2E_OWNER_PASSWORD: unused
+      - if: inputs.milestone != 'load'
+        run: node scripts/e2e/${{ inputs.milestone }}.mjs ${{ inputs.phase }}
         env:
           COAGENTS_HUB: ${{ secrets.COAGENTS_HUB }}
           E2E_INVITES: ${{ secrets.E2E_INVITES }}

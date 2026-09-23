@@ -14,11 +14,18 @@ export class HubClient {
     if (this.cookies.size) headers.cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ");
     if (method !== "GET") headers["x-csrf-token"] = this.csrf;
     if (body !== undefined) headers["content-type"] = "application/json";
-    const res = await fetch(`${this.base}/v1${path}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    // Network failures are retried only when repeating is safe: reads, and writes with a request_id.
+    const safe = method === "GET" || (body && typeof body === "object" && "request_id" in body);
+    let res;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        res = await fetch(`${this.base}/v1${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+        break;
+      } catch (err) {
+        if (!safe || attempt >= 4) throw err;
+        await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+      }
+    }
     for (const sc of res.headers.getSetCookie()) {
       const [pair] = sc.split(";");
       const i = pair.indexOf("=");
