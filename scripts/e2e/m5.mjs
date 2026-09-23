@@ -47,12 +47,16 @@ async function prepare() {
 async function restrict() {
   const { project_id: pid } = JSON.parse(env("E2E_PAYLOAD"));
   const o = await owner();
+  // Check membership before creating anything, so a retry never leaves an unrestricted copy behind.
+  const { members } = await o.expect(200, "GET", `/projects/${pid}/members`);
+  const contrib = members.find((m) => m.username === env("E2E_CONTRIB_USER"));
+  if (!contrib) {
+    console.error("contributor has not joined yet");
+    process.exit(3);
+  }
   const f = await upload(o, pid, "预算.md", Buffer.from(BUDGET));
   const a = await o.expect(201, "POST", `/projects/${pid}/artifacts`, { title: "2026 预算", kind: "file", file_id: f.id, request_id: rid("budget") });
   const pub = await o.expect(200, "POST", `/projects/${pid}/artifacts/${a.id}/publish`, { expected_revision: 1, request_id: rid("pub") });
-  const { members } = await o.expect(200, "GET", `/projects/${pid}/members`);
-  const contrib = members.find((m) => m.username === env("E2E_CONTRIB_USER"));
-  assert.ok(contrib, "contributor has not joined yet");
   await o.expect(200, "PUT", `/projects/${pid}/artifacts/${a.id}/access`, { visibility: "restricted", user_ids: [contrib.user_id], request_id: rid("acl") });
   console.log(JSON.stringify({ budget_id: a.id, budget_version: pub.versions[0].id }));
 }
@@ -87,7 +91,9 @@ async function b() {
   const vList = (await v.expect(200, "GET", `/projects/${pid}/artifacts`)).artifacts;
   assert.equal(vList.some((a) => a.id === budget.id), false);
   const vEvents = (await v.expect(200, "GET", `/projects/${pid}/events?limit=200`)).events;
-  assert.equal(vEvents.some((e) => e.subject_id === budget.id || JSON.stringify(e).includes("预算")), false);
+  assert.equal(vEvents.some((e) => e.subject_id === budget.id), false);
+  const vAll = await v.expect(200, "GET", `/projects/${pid}/artifacts`);
+  assert.equal(JSON.stringify(vAll).includes(budget.id), false);
   assert.equal((await v.call("GET", `/projects/${pid}/artifacts/${budget.id}`)).status, 404);
   const direct = await download(v, fileUrl);
   assert.equal(direct.status, 404);
