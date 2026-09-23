@@ -14,4 +14,4 @@
 | 证书校验 | Connector 使用 Node 默认校验；自签证书服务被拒绝（`tests/connector.integration.test.ts`） |
 | 撤销与卸载 | `coagents uninstall claude-code`：`.mcp.json` 恢复后 SHA-256 与安装前一致（bc1652e7…）；服务端凭证撤销，旧令牌 401；本机凭证删除 |
 | 实时收取与重连 | Connector 在 MCP 运行期间保持 SSE 流，断线按游标退避重连；服务重启后自动恢复（2026-09-23 实测）；Hub 显示送达/已读序号 |
-| Git 交接 | 待验证（M6） |
+| Git 交接 | Connector 层能力与客户端无关；跨设备实测见 [Codex 记录](codex.md)，本地真实 git 集成测试见 `tests/handoff.integration.test.ts` |
