@@ -1,6 +1,6 @@
 # CoAgents 第一版实施计划
 
-版本：0.3 · 日期：2026-09-23 · 状态：M0–M2 已通过，M3 进行中。
+版本：0.3 · 日期：2026-09-23 · 状态：M0–M3 已通过，M4 进行中。
 
 第一版以多人分布式协作为主线，21 项 FR 全部是发布门槛。开发顺序是先打通一条跨机最小闭环再加宽，而不是按层完成基础设施后再做业务。Hub 从 M1 起就提供最小可用版本，作为人工验收入口逐步补全。任何里程碑都以下列 done criteria 的实测结果为准，"代码写完"不算完成。
 
@@ -11,7 +11,7 @@
 | M0 决策与骨架 | 技术栈与 OD-01/02/04 决定；修正文档不一致；git 仓库；monorepo（contract、server、hub、connector）；CI | `pnpm install && pnpm check && pnpm test` 本地通过；CI 工作流同样通过；契约 schema 只在 `packages/contract` 定义 | 已通过（2026-09-23：本地与 GitHub Actions CI 均通过） |
 | M1 跨机登录 | SQLite 迁移、CLI 首次设置、用户名密码登录、邀请注册、项目与成员、最小 Hub；部署到主机并配置 HTTPS | 两台独立机器经 HTTPS 登录看到同一项目；无邀请注册、证书错误、越权访问均被拒绝（UC-01、UC-12、UC-17 主路径） | 已通过（2026-09-23）：机器 A 为开发机，机器 B 为 GitHub 托管 runner（美国网络），经 `https://coagents.chengdu80.org` 完成邀请注册、接受、隔离与拒绝检查，见 `scripts/e2e/m1.mjs`；服务端 27 项测试。客户端证书校验留到 M3 在 Connector 上验证 |
 | M2 任务核心 | 任务、原子租约、语义状态动作、版本冲突、幂等、事件序号、决策/阻塞；表驱动权限测试 | 两台机器各发 100 次并发认领，双有效持有者为 0；丢弃响应后重试不产生重复写入（UC-04、UC-05、UC-06） | 已通过（2026-09-23）：开发机与 GitHub runner 在约定时刻同时认领 100 个任务，A 胜 22、B 胜 78、双方均成功 0，服务端持有者与胜者逐一一致；中断首个请求后以同一 request_id 重试两次，只有 1 个任务。见 `scripts/e2e/m2.mjs`；服务端 45 项测试 |
-| M3 Connector + Claude Code | stdio MCP、设备码授权、`.coagents/project.json` 绑定、配置预览/安装/卸载 | Claude Code 真实完成 `get_context`、`claim_task`、`submit_task`；卸载后配置与安装前逐字一致（UC-13） | 未开始 |
+| M3 Connector + Claude Code | stdio MCP、设备码授权、`.coagents/project.json` 绑定、配置预览/安装/卸载 | Claude Code 真实完成 `get_context`、`claim_task`、`submit_task`；卸载后配置与安装前逐字一致（UC-13） | 已通过（2026-09-23）：见 [Claude Code 集成记录](../docs/records/claude-code.md)；设备码授权经 Hub 页面批准；服务端与 Connector 共 62 项测试 |
 | M4 实时与撤权 | SSE、游标补读、通知去重、送达/已读分开、撤权主动断开连接 | 断网重连后不漏事件；撤销设备后旧推送连接不再收到事件，其他设备正常（UC-15、UC-18、UC-22） | 未开始 |
 | M5 成果与验收 | 草稿/发布版本、上传、受限名单、Markdown 清理、提交/接受/退回、审计 | UC-07 至 UC-11 通过；直链下载受限文件被拒绝 | 未开始 |
 | M6 交接 + Codex CLI | Git 只读检查、交接状态机、Codex CLI 适配 | 接收端缺 commit 时拒绝接手，补齐后接手成功（UC-14、UC-19）；两种客户端都有实测记录 | 未开始 |

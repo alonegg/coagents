@@ -88,25 +88,27 @@ export function removeInstall(format: ConfigFormat, path: string, entry: McpEntr
   return outcome;
 }
 
-// Line diff for previews; configuration files are small.
+// Line diff for previews (LCS); configuration files are small.
 export function diffLines(before: string | null, after: string | null): string {
   const a = before === null ? [] : before.split("\n");
   const b = after === null ? [] : after.split("\n");
+  const lcs: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      lcs[i]![j] = a[i] === b[j] ? lcs[i + 1]![j + 1]! + 1 : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!);
+    }
+  }
   const out: string[] = [];
   let i = 0;
   let j = 0;
-  while (i < a.length || j < b.length) {
-    if (i < a.length && j < b.length && a[i] === b[j]) {
-      out.push(`  ${a[i]}`);
-      i++;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      out.push(`  ${a[i++]}`);
       j++;
-    } else if (j < b.length && !a.slice(i).includes(b[j]!)) {
-      out.push(`+ ${b[j]}`);
-      j++;
-    } else {
-      out.push(`- ${a[i]}`);
-      i++;
-    }
+    } else if (lcs[i + 1]![j]! >= lcs[i]![j + 1]!) out.push(`- ${a[i++]}`);
+    else out.push(`+ ${b[j++]}`);
   }
+  while (i < a.length) out.push(`- ${a[i++]}`);
+  while (j < b.length) out.push(`+ ${b[j++]}`);
   return out.join("\n");
 }

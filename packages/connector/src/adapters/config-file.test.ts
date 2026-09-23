@@ -47,3 +47,11 @@ describe("config file install and removal", () => {
     expect(Object.keys(JSON.parse(readFileSync(path, "utf8")).mcpServers)).toEqual(["other", "mine"]);
   });
 });
+
+describe("diffLines", () => {
+  it("aligns unchanged lines and shows removals before additions", async () => {
+    const { diffLines } = await import("./config-file.js");
+    expect(diffLines("a\nb\nc", "a\nB\nc\nd")).toBe("  a\n- b\n+ B\n  c\n+ d");
+    expect(diffLines(null, "x")).toBe("+ x");
+  });
+});
