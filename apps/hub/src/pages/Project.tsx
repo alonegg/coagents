@@ -10,8 +10,10 @@ import { BoardTab } from "./Board.js";
 import { DecisionsTab } from "./Decisions.js";
 import { MembersTab } from "./Members.js";
 import { MilestonesTab } from "./Milestones.js";
+import { OverviewTab } from "./Overview.js";
+import { SettingsTab } from "./Settings.js";
 
-const TAB_LABEL: Record<ProjectTab, string> = { board: "看板", milestones: "里程碑", artifacts: "成果", activity: "活动", decisions: "决策", agents: "Agent 连接", members: "成员与邀请" };
+const TAB_LABEL: Record<ProjectTab, string> = { overview: "概览", board: "看板", milestones: "里程碑", artifacts: "成果", activity: "活动", decisions: "决策", agents: "Agent 连接", members: "成员与邀请", settings: "设置与审计" };
 
 export function ProjectPage({ route, session }: { route: { id: string; tab: ProjectTab; taskId?: string; artifactId?: string }; session: SessionView }) {
   const [project, setProject] = useState<ProjectView | null>(null);
@@ -41,6 +43,11 @@ export function ProjectPage({ route, session }: { route: { id: string; tab: Proj
           <a key={t} href={`#/projects/${project.id}/${t}`} aria-current={route.tab === t ? "page" : undefined}>{TAB_LABEL[t]}</a>
         ))}
       </nav>
+      {project.lifecycle === "archived" && (
+        <p className="notice">项目已归档，所有内容只读。需要继续工作时，由 Owner/Admin 在“设置与审计”中恢复项目。</p>
+      )}
+      {route.tab === "overview" && <OverviewTab project={project} session={session} onChanged={load} />}
+      {route.tab === "settings" && <SettingsTab project={project} session={session} onChanged={load} />}
       {route.tab === "board" && <BoardTab project={project} session={session} taskId={route.taskId} />}
       {route.tab === "milestones" && <MilestonesTab project={project} session={session} />}
       {route.tab === "artifacts" && (route.artifactId ? <ArtifactDetail project={project} session={session} artifactId={route.artifactId} /> : <ArtifactsTab project={project} session={session} />)}

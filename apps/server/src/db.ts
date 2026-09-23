@@ -354,6 +354,11 @@ const MIGRATIONS: readonly string[] = [
   CREATE INDEX search_docs_by_artifact ON search_docs(artifact_id);
   CREATE VIRTUAL TABLE search_fts USING fts5(title, body, artifact_version_id UNINDEXED, tokenize = 'unicode61 remove_diacritics 2');
   `,
+  `
+  ALTER TABLE projects ADD COLUMN deleted_at TEXT;
+  ALTER TABLE projects ADD COLUMN deleted_by TEXT REFERENCES users(id);
+  CREATE INDEX events_by_seq_project ON events(seq DESC, project_id);
+  `,
 ];
 
 export function openDb(path: string): Db {

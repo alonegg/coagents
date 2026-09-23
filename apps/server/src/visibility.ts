@@ -23,3 +23,13 @@ export function artifactReadable(alias: string, v: Viewer, opts: { includeDelete
     params: [v.userId, v.userId, v.userId],
   };
 }
+
+// The same rule when the viewer's role differs per row (cross-project queries): `m` is the viewer's
+// membership row for the artifact's project.
+export function artifactReadableByMembership(alias: string, membership: string, userId: string): { sql: string; params: string[] } {
+  const a = alias;
+  return {
+    sql: `(${membership}.role IN ('owner', 'admin')) OR (${a}.status = 'draft' AND ${a}.author_id = ?) OR (${a}.status = 'published' AND (${a}.visibility = 'project' OR ${a}.author_id = ? OR EXISTS (SELECT 1 FROM artifact_grants g WHERE g.artifact_id = ${a}.id AND g.user_id = ?)))`,
+    params: [userId, userId, userId],
+  };
+}

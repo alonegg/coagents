@@ -9,7 +9,7 @@ User=coagents
 Group=coagents
 EnvironmentFile=/etc/coagents/coagents.env
 WorkingDirectory=/opt/coagents/current
-ExecStart=/opt/coagents/node/bin/node /opt/coagents/current/apps/server/dist/main.js serve
+ExecStart=/bin/sh -c 'COAGENTS_BUILD=$$(cat /opt/coagents/current/apps/hub/dist/build.txt 2>/dev/null) exec /opt/coagents/node/bin/node /opt/coagents/current/apps/server/dist/main.js serve'
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true

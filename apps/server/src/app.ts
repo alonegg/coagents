@@ -13,6 +13,7 @@ import { agentRoutes } from "./routes/agents.js";
 import { artifactRoutes } from "./routes/artifacts.js";
 import { handoffRoutes } from "./routes/handoffs.js";
 import { planningRoutes } from "./routes/planning.js";
+import { activityRoutes } from "./routes/activity.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { agentMiddleware } from "./agents.js";
 
@@ -49,7 +50,9 @@ export function createApi(ctx: AppContext): Hono<Env> {
   api.use("*", agentMiddleware(ctx));
   api.use("*", csrfMiddleware(ctx));
 
-  api.get("/health", (c) => c.json({ status: "ok", version: SERVER_VERSION, schema_version: schemaVersion(ctx.db) }));
+  api.get("/health", (c) =>
+    c.json({ status: "ok", version: SERVER_VERSION, schema_version: schemaVersion(ctx.db), ...(ctx.config.build ? { build: ctx.config.build } : {}) }),
+  );
   api.route("/session", sessionRoutes(ctx, new LoginLimiter()));
   api.route("/projects", projectRoutes(ctx));
   api.route("/projects", workRoutes(ctx));
@@ -59,6 +62,7 @@ export function createApi(ctx: AppContext): Hono<Env> {
   api.route("/invitations", invitationRoutes(ctx));
   api.route("/devices", deviceRoutes(ctx));
   api.route("/notifications", notificationRoutes(ctx));
+  api.route("/activity", activityRoutes(ctx));
   api.route("/", agentRoutes(ctx));
   return api;
 }

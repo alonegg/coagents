@@ -2,6 +2,7 @@ import {
   ChangeRoleInput,
   CreateInvitationInput,
   CreateProjectInput,
+  EditProjectInput,
   TransferOwnershipInput,
   type InvitationView,
   type MemberView,
@@ -25,6 +26,7 @@ function humanActor(auth: AuthState): Actor {
   return { kind: "user", userId: auth.user.id, displayName: auth.user.display_name, deviceId: auth.deviceId, clientId: null };
 }
 import { parseBody } from "../validate.js";
+import { projectSummary } from "../summaries.js";
 
 const PROJECT_COLUMNS = "p.id, p.name, p.description, p.lifecycle, p.timezone, p.due_at, m.role, p.created_at, p.updated_at";
 
@@ -49,16 +51,74 @@ export function invitationState(row: {
 export function projectRoutes(ctx: AppContext): Hono<Env> {
   const r = new Hono<Env>();
 
+  // Cards with viewer-scoped summaries; name filter and sort by visible activity or name.
   r.get("/", (c) => {
     const auth = requireAuth(c);
     const lifecycle = c.req.query("lifecycle") === "archived" ? "archived" : "active";
+    const q = (c.req.query("q") ?? "").trim();
     const rows = ctx.db
       .prepare(
         `SELECT ${PROJECT_COLUMNS} FROM projects p JOIN memberships m ON m.project_id = p.id
-         WHERE m.user_id = ? AND p.lifecycle = ? ORDER BY p.updated_at DESC`,
+         WHERE m.user_id = ? AND p.lifecycle = ? AND p.deleted_at IS NULL ${q ? "AND p.name LIKE ? ESCAPE '\\'" : ""}`,
       )
-      .all(auth.user.id, lifecycle) as ProjectView[];
-    return c.json({ projects: rows });
+      .all(auth.user.id, lifecycle, ...(q ? [`%${q.replace(/[\\%_]/g, (x) => `\\${x}`)}%`] : [])) as ProjectView[];
+    const cards = rows.map((p) => ({ ...p, summary: projectSummary(ctx, p.id, auth.user.id, p.role) }));
+    if (c.req.query("sort") === "name") cards.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+    else cards.sort((a, b) => (b.summary.last_activity_at ?? b.created_at).localeCompare(a.summary.last_activity_at ?? a.created_at));
+    return c.json({ projects: cards });
+  });
+
+  r.patch("/:id", async (c) => {
+    const auth = requireAuth(c);
+    const access = projectAccess(ctx, auth.user.id, c.req.param("id"));
+    requirePermission(access, "milestone.manage");
+    requireActive(access);
+    const input = await parseBody(c, EditProjectInput);
+    ctx.db
+      .prepare("UPDATE projects SET name = COALESCE(?, name), description = COALESCE(?, description), updated_at = ? WHERE id = ?")
+      .run(input.name ?? null, input.description ?? null, nowIso(ctx), access.projectId);
+    appendEvent(ctx, access.projectId, humanActor(auth), { kind: "project.edited", subjectType: "project", subjectId: access.projectId, summary: "修改项目信息", data: {} });
+    return c.json(getProject(ctx, auth.user.id, access.projectId));
+  });
+
+  // Archiving makes all business data read-only; restoring does not bring back removed members or
+  // revoked credentials, because those are separate records that archiving never touched.
+  for (const [action, to] of [["archive", "archived"], ["restore", "active"]] as const) {
+    r.post(`/:id/${action}`, (c) => {
+      const auth = requireAuth(c);
+      const access = projectAccess(ctx, auth.user.id, c.req.param("id"));
+      requirePermission(access, "project.archive");
+      if (access.lifecycle === to) throw new HttpError(409, "version_conflict", `Project is already ${to}`);
+      ctx.db.transaction(() => {
+        ctx.db.prepare("UPDATE projects SET lifecycle = ?, updated_at = ? WHERE id = ?").run(to, nowIso(ctx), access.projectId);
+        if (to === "archived") expireLeases(ctx, { projectId: access.projectId });
+        audit(ctx, { projectId: access.projectId, actorUserId: auth.user.id, action: `project.${action}`, objectType: "project", objectId: access.projectId });
+        appendEvent(ctx, access.projectId, humanActor(auth), {
+          kind: `project.${to === "archived" ? "archived" : "restored"}`,
+          subjectType: "project",
+          subjectId: access.projectId,
+          summary: to === "archived" ? "归档项目（只读）" : "恢复项目",
+          data: {},
+        });
+      })();
+      return c.json(getProject(ctx, auth.user.id, access.projectId));
+    });
+  }
+
+  // Deleting is separate from archiving and owner-only; first version: soft delete, hidden everywhere.
+  r.delete("/:id", (c) => {
+    const auth = requireAuth(c);
+    const access = projectAccess(ctx, auth.user.id, c.req.param("id"));
+    requirePermission(access, "project.transfer_or_delete");
+    const now = nowIso(ctx);
+    ctx.db.transaction(() => {
+      ctx.db.prepare("UPDATE projects SET deleted_at = ?, deleted_by = ? WHERE id = ?").run(now, auth.user.id, access.projectId);
+      ctx.db.prepare("UPDATE clients SET revoked_at = ? WHERE project_id = ? AND revoked_at IS NULL").run(now, access.projectId);
+      expireLeases(ctx, { projectId: access.projectId });
+      audit(ctx, { projectId: access.projectId, actorUserId: auth.user.id, action: "project.delete", objectType: "project", objectId: access.projectId });
+    })();
+    wakeAuthChanged();
+    return c.body(null, 204);
   });
 
   r.post("/", async (c) => {

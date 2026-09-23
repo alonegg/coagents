@@ -21,7 +21,8 @@ RELEASE=$1; REGISTRY=$2
 export PATH=/opt/coagents/node/bin:$PATH
 cd "/opt/coagents/releases/$RELEASE"
 pnpm install --frozen-lockfile --registry="$REGISTRY" --reporter=append-only | tail -3
-pnpm build | tail -2
+VITE_COAGENTS_BUILD="$RELEASE" pnpm build | tail -2
+echo "$RELEASE" > apps/hub/dist/build.txt
 install -m 0644 deploy/coagents.service /etc/systemd/system/coagents.service
 COAGENTS_DOMAIN=x caddy validate --config deploy/Caddyfile --adapter caddyfile >/dev/null
 install -m 0644 deploy/Caddyfile /etc/caddy/Caddyfile

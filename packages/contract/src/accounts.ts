@@ -48,6 +48,10 @@ export const CreateProjectInput = z
   })
   .strict();
 
+export const EditProjectInput = z
+  .object({ name: z.string().trim().min(1).max(120).optional(), description: z.string().max(5000).optional() })
+  .strict();
+
 export const ProjectView = z.object({
   id: z.string(),
   name: z.string(),

@@ -9,6 +9,8 @@ export interface ServerConfig {
   leaseMinutes: number;
   // Managed storage for uploaded artifact files; never exposed as paths to clients.
   filesDir: string;
+  // Release id of the deployed Hub bundle, so open tabs can tell they are stale.
+  build?: string;
 }
 
 export interface AppContext {

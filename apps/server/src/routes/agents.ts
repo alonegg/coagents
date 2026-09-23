@@ -105,7 +105,7 @@ export function agentRoutes(ctx: AppContext): Hono<Env> {
         `SELECT dc.*, p.name AS project_name FROM device_codes dc
          JOIN projects p ON p.id = dc.project_id
          JOIN memberships m ON m.project_id = dc.project_id AND m.user_id = ?
-         WHERE dc.user_code = ? AND dc.approved_by IS NULL AND dc.denied_at IS NULL AND dc.expires_at > ?`,
+         WHERE dc.user_code = ? AND dc.approved_by IS NULL AND dc.denied_at IS NULL AND dc.expires_at > ? AND p.deleted_at IS NULL`,
       )
       .get(userId, normalizeUserCode(userCode), nowIso(ctx)) as (CodeRow & { project_name: string }) | undefined;
     if (!row) throw invalidCode();

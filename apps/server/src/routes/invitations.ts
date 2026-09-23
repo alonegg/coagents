@@ -28,7 +28,7 @@ function pendingInvitation(ctx: AppContext, token: string): PendingInvitation {
     .prepare(
       `SELECT i.id, i.project_id, p.name AS project_name, p.lifecycle, i.role, i.target_username, i.expires_at
        FROM invitations i JOIN projects p ON p.id = i.project_id
-       WHERE i.token_hash = ? AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > ?`,
+       WHERE i.token_hash = ? AND i.accepted_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > ? AND p.deleted_at IS NULL`,
     )
     .get(hashSecret(token), nowIso(ctx)) as PendingInvitation | undefined;
   if (!row || row.lifecycle !== "active") throw invalidInvitation();

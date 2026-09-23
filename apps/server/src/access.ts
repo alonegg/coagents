@@ -13,7 +13,7 @@ export function projectAccess(ctx: AppContext, userId: string, projectId: string
   const row = ctx.db
     .prepare(
       `SELECT m.role, p.lifecycle FROM memberships m JOIN projects p ON p.id = m.project_id
-       WHERE m.project_id = ? AND m.user_id = ?`,
+       WHERE m.project_id = ? AND m.user_id = ? AND p.deleted_at IS NULL`,
     )
     .get(projectId, userId) as { role: ProjectRole; lifecycle: "active" | "archived" } | undefined;
   if (!row) throw notFound();
