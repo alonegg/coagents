@@ -59,6 +59,7 @@ export const ProjectView = z.object({
   lifecycle: z.enum(["active", "archived"]),
   timezone: z.string(),
   due_at: z.string().nullable(),
+  due_overdue: z.boolean().optional(),
   role: ProjectRole,
   created_at: z.string(),
   updated_at: z.string(),

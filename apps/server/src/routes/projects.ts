@@ -413,8 +413,10 @@ export function projectRoutes(ctx: AppContext): Hono<Env> {
   return r;
 }
 
+// Overdue is computed with the server clock, never the viewer's.
 function getProject(ctx: AppContext, userId: string, projectId: string): ProjectView {
-  return ctx.db
+  const p = ctx.db
     .prepare(`SELECT ${PROJECT_COLUMNS} FROM projects p JOIN memberships m ON m.project_id = p.id WHERE p.id = ? AND m.user_id = ?`)
     .get(projectId, userId) as ProjectView;
+  return { ...p, due_overdue: p.due_at !== null && p.lifecycle === "active" && p.due_at < nowIso(ctx) };
 }

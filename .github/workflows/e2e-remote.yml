@@ -34,7 +34,17 @@ jobs:
           LOAD_STATE_JSON: ${{ secrets.E2E_PAYLOAD }}
           E2E_OWNER_USER: unused
           E2E_OWNER_PASSWORD: unused
-      - if: inputs.milestone != 'load'
+      - if: inputs.milestone == 'm9-skew'
+        run: |
+          sudo apt-get install -y -qq faketime >/dev/null
+          faketime -f '+3h' node scripts/e2e/m9-skew.mjs
+          faketime -f '-2h' node scripts/e2e/m9-skew.mjs
+        env:
+          COAGENTS_HUB: ${{ secrets.COAGENTS_HUB }}
+          E2E_PAYLOAD: ${{ secrets.E2E_PAYLOAD }}
+          E2E_CONTRIB_USER: ${{ secrets.E2E_CONTRIB_USER }}
+          E2E_CONTRIB_PASSWORD: ${{ secrets.E2E_CONTRIB_PASSWORD }}
+      - if: inputs.milestone != 'load' && inputs.milestone != 'm9-skew'
         run: node scripts/e2e/${{ inputs.milestone }}.mjs ${{ inputs.phase }}
         env:
           COAGENTS_HUB: ${{ secrets.COAGENTS_HUB }}

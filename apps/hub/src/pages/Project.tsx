@@ -36,7 +36,7 @@ export function ProjectPage({ route, session }: { route: { id: string; tab: Proj
       <p>{project.description || <span className="muted">暂无说明</span>}</p>
       <p className="muted">
         项目时区 {project.timezone} · 最近更新 {formatTime(project.updated_at, session.user.timezone)}
-        {project.due_at && <> · 项目截止 {formatTime(project.due_at, session.user.timezone)}{project.due_at < new Date().toISOString() && <span className="warn">（已逾期）</span>}</>}
+        {project.due_at && <> · 项目截止 {formatTime(project.due_at, session.user.timezone)}{project.due_overdue && <span className="warn">（已逾期）</span>}</>}
       </p>
       <nav className="tabs" aria-label="项目页面">
         {(Object.keys(TAB_LABEL) as ProjectTab[]).map((t) => (
