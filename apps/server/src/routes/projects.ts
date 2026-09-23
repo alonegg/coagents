@@ -16,6 +16,14 @@ import { nowIso, type AppContext } from "../context.js";
 import { HttpError, invalid, notAllowed, notFound } from "../http-error.js";
 import { hashSecret, newId, newSecret } from "../ids.js";
 import { expireLeases } from "../tasks.js";
+import { wakeAuthChanged } from "../bus.js";
+import { appendEvent } from "../events.js";
+import type { AuthState } from "../auth.js";
+import type { Actor } from "../context.js";
+
+function humanActor(auth: AuthState): Actor {
+  return { kind: "user", userId: auth.user.id, displayName: auth.user.display_name, deviceId: auth.deviceId, clientId: null };
+}
 import { parseBody } from "../validate.js";
 
 const PROJECT_COLUMNS = "p.id, p.name, p.description, p.lifecycle, p.timezone, m.role, p.created_at, p.updated_at";
@@ -111,6 +119,13 @@ export function projectRoutes(ctx: AppContext): Hono<Env> {
     const input = await parseBody(c, ChangeRoleInput);
     ctx.db.transaction(() => {
       ctx.db.prepare("UPDATE memberships SET role = ? WHERE project_id = ? AND user_id = ?").run(input.role, access.projectId, targetId);
+      appendEvent(ctx, access.projectId, humanActor(auth), {
+        kind: "member.role_changed",
+        subjectType: "user",
+        subjectId: targetId,
+        summary: `调整成员角色为 ${input.role}`,
+        data: { target_user_id: targetId, from, to: input.role },
+      });
       audit(ctx, {
         projectId: access.projectId,
         actorUserId: auth.user.id,
@@ -120,6 +135,7 @@ export function projectRoutes(ctx: AppContext): Hono<Env> {
         detail: { from, to: input.role },
       });
     })();
+    wakeAuthChanged();
     return c.json({ user_id: targetId, role: input.role });
   });
 
@@ -133,6 +149,13 @@ export function projectRoutes(ctx: AppContext): Hono<Env> {
       ctx.db.prepare("DELETE FROM memberships WHERE project_id = ? AND user_id = ?").run(access.projectId, targetId);
       ctx.db.prepare("UPDATE clients SET revoked_at = ? WHERE project_id = ? AND user_id = ? AND revoked_at IS NULL").run(now, access.projectId, targetId);
       expireLeases(ctx, { projectId: access.projectId, userId: targetId });
+      appendEvent(ctx, access.projectId, humanActor(auth), {
+        kind: "member.removed",
+        subjectType: "user",
+        subjectId: targetId,
+        summary: "移除了一位成员",
+        data: { target_user_id: targetId },
+      });
       ctx.db
         .prepare(
           `UPDATE ownership_transfers SET resolved_at = ?, outcome = 'cancelled'
@@ -148,6 +171,7 @@ export function projectRoutes(ctx: AppContext): Hono<Env> {
         detail: { role: from },
       });
     })();
+    wakeAuthChanged();
     return c.body(null, 204);
   });
 
@@ -287,7 +311,15 @@ export function projectRoutes(ctx: AppContext): Hono<Env> {
       ctx.db.prepare("UPDATE memberships SET role = 'owner' WHERE project_id = ? AND user_id = ?").run(access.projectId, auth.user.id);
       ctx.db.prepare("UPDATE ownership_transfers SET resolved_at = ?, outcome = 'accepted' WHERE id = ?").run(now, t.id);
       audit(ctx, { projectId: access.projectId, actorUserId: auth.user.id, action: "ownership.accept", objectType: "user", objectId: auth.user.id, detail: { previous_owner: t.from_user_id } });
+      appendEvent(ctx, access.projectId, humanActor(auth), {
+        kind: "member.ownership_transferred",
+        subjectType: "user",
+        subjectId: auth.user.id,
+        summary: "接受了项目所有权",
+        data: { previous_owner: t.from_user_id },
+      });
     })();
+    wakeAuthChanged();
     return c.json(getProject(ctx, auth.user.id, access.projectId));
   });
 

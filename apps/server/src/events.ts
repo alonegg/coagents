@@ -1,6 +1,8 @@
 import type { EventPage, EventView } from "@coagents/contract";
 import { nowIso, type Actor, type AppContext } from "./context.js";
+import { wakeProject } from "./bus.js";
 import { newId } from "./ids.js";
+import { notifyForEvent } from "./notifications.js";
 
 export interface NewEvent {
   kind: string;
@@ -21,7 +23,10 @@ export function appendEvent(ctx: AppContext, projectId: string, actor: Actor, e:
     )
     .run(newId("evt"), projectId, e.kind, actor.userId, actor.clientId, actor.deviceId, e.subjectType, e.subjectId, e.summary, JSON.stringify(e.data ?? {}), now);
   ctx.db.prepare("UPDATE projects SET updated_at = ? WHERE id = ?").run(now, projectId);
-  return Number(res.lastInsertRowid);
+  const seq = Number(res.lastInsertRowid);
+  notifyForEvent(ctx, projectId, seq, e.kind, actor, e.data ?? {});
+  wakeProject(projectId);
+  return seq;
 }
 
 interface EventRow {
@@ -86,6 +91,16 @@ export function ackCursor(ctx: AppContext, consumer: { kind: "device" | "client"
     )
     .run(consumer.kind, consumer.id, projectId, target, nowIso(ctx));
   return readCursor(ctx, consumer, projectId);
+}
+
+export function markStreamDelivered(ctx: AppContext, consumer: { kind: "device" | "client"; id: string }, projectId: string, seq: number): void {
+  ctx.db
+    .prepare(
+      `INSERT INTO cursors (consumer_kind, consumer_id, project_id, last_seen_seq, delivered_seq, updated_at) VALUES (?, ?, ?, 0, ?, ?)
+       ON CONFLICT (consumer_kind, consumer_id, project_id)
+       DO UPDATE SET delivered_seq = MAX(delivered_seq, excluded.delivered_seq), updated_at = excluded.updated_at`,
+    )
+    .run(consumer.kind, consumer.id, projectId, seq, nowIso(ctx));
 }
 
 export function readCursor(ctx: AppContext, consumer: { kind: "device" | "client"; id: string }, projectId: string): number {

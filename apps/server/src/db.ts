@@ -217,6 +217,22 @@ const MIGRATIONS: readonly string[] = [
     denied_at TEXT
   ) STRICT;
   `,
+  `
+  ALTER TABLE cursors ADD COLUMN delivered_seq INTEGER NOT NULL DEFAULT 0;
+
+  CREATE TABLE notifications (
+    id TEXT PRIMARY KEY,
+    recipient_id TEXT NOT NULL REFERENCES users(id),
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    event_seq INTEGER NOT NULL REFERENCES events(seq),
+    kind TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    delivered_at TEXT,
+    read_at TEXT,
+    UNIQUE (recipient_id, event_seq)
+  ) STRICT;
+  CREATE INDEX notifications_by_recipient ON notifications(recipient_id, created_at);
+  `,
 ];
 
 export function openDb(path: string): Db {

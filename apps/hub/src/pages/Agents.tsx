@@ -32,7 +32,7 @@ export function AgentsTab({ project, session }: { project: ProjectView; session:
       {agents?.length === 0 && <p className="muted">还没有 Agent 连接。</p>}
       {agents && agents.length > 0 && (
         <table>
-          <thead><tr><th>连接</th><th>成员</th><th>权限</th><th>状态</th><th>最近活动</th><th /></tr></thead>
+          <thead><tr><th>连接</th><th>成员</th><th>权限</th><th>状态</th><th>事件送达 / 已读</th><th>最近活动</th><th /></tr></thead>
           <tbody>
             {agents.map((a) => (
               <tr key={a.id}>
@@ -40,6 +40,7 @@ export function AgentsTab({ project, session }: { project: ProjectView; session:
                 <td>{a.username}</td>
                 <td>{a.scopes.includes("write") ? "读写" : "只读"}</td>
                 <td>{a.verified_at ? "已验证" : "待验证（尚未发生真实调用）"}</td>
+                <td title="送达表示已推送到该设备的 Connector；已读表示 Agent 已确认处理">#{a.delivered_seq} / #{a.read_seq}</td>
                 <td>{a.last_seen_at ? formatTime(a.last_seen_at, tz) : "—"}</td>
                 <td>{(manager || a.user_id === session.user.id) && <button className="link danger" onClick={() => revoke(a)}>撤销</button>}</td>
               </tr>

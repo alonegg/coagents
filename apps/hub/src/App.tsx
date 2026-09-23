@@ -1,6 +1,7 @@
 import type { SessionView } from "@coagents/contract";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, loadSession, setCsrf } from "./api.js";
+import { NotificationBell } from "./Notifications.js";
 import { go, useRoute } from "./router.js";
 import { DeviceCodePage } from "./pages/DeviceCode.js";
 import { DevicesPage } from "./pages/Devices.js";
@@ -42,6 +43,7 @@ export function App() {
       <header className="topbar">
         <a href="#/projects" className="brand">CoAgents Hub</a>
         <nav>
+          <NotificationBell timeZone={session.user.timezone} />
           <a href="#/devices">设备</a>
           <span className="muted">{session.user.display_name}（{session.user.username}）</span>
           <button className="link" onClick={signOut}>退出</button>

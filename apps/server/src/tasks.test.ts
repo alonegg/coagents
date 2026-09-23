@@ -69,7 +69,7 @@ describe("tasks", () => {
     expect(detail.body.submissions.map((s: any) => s.outcome)).toEqual(["accepted", "rejected"]);
 
     const kinds = (await owner.json("GET", `/v1/projects/${pid}/events`)).body.events.map((e: any) => e.kind);
-    expect(kinds).toEqual([
+    expect(kinds.filter((k: string) => k.startsWith("task."))).toEqual([
       "task.created",
       "task.claimed",
       "task.submitted",
@@ -182,7 +182,7 @@ describe("idempotency", () => {
     const b = await owner.json("POST", `/v1/projects/${pid}/tasks`, body);
     expect(b).toEqual(a);
     expect((await owner.json("GET", `/v1/projects/${pid}/tasks`)).body.tasks).toHaveLength(1);
-    expect((await owner.json("GET", `/v1/projects/${pid}/events`)).body.events).toHaveLength(1);
+    expect((await owner.json("GET", `/v1/projects/${pid}/events`)).body.events.filter((e: any) => e.kind === "task.created")).toHaveLength(1);
   });
 
   it("returns the original lease on a retried claim and rejects request_id reuse elsewhere", async () => {
@@ -250,7 +250,9 @@ describe("blockers and decisions", () => {
 
 describe("events", () => {
   it("pages by cursor without skipping and keeps acknowledged cursors monotonic", async () => {
-    const { pid, owner } = await team();
+    const env = testEnv();
+    const owner = await seedUser(env, "lin");
+    const pid = (await owner.json("POST", "/v1/projects", { name: "p" })).body.id;
     for (let i = 0; i < 5; i++) await newTask(owner, pid, `t${i}`);
     const p1 = (await owner.json("GET", `/v1/projects/${pid}/events?limit=2`)).body;
     expect(p1).toMatchObject({ has_more: true });

@@ -9,6 +9,7 @@ import { nowIso, type AppContext } from "../context.js";
 import { HttpError, notFound } from "../http-error.js";
 import { hashSecret, newId, newSecret } from "../ids.js";
 import { expireLeases } from "../tasks.js";
+import { wakeAuthChanged } from "../bus.js";
 import { parseBody } from "../validate.js";
 
 const CODE_TTL_SECONDS = 600;
@@ -196,8 +197,10 @@ export function agentRoutes(ctx: AppContext): Hono<Env> {
     const all = access.role === "owner" || access.role === "admin";
     const rows = ctx.db
       .prepare(
-        `SELECT cl.id, cl.label, cl.user_id, u.username, cl.device_id, d.label AS device_label, cl.scopes, cl.created_at, cl.last_seen_at, cl.verified_at
+        `SELECT cl.id, cl.label, cl.user_id, u.username, cl.device_id, d.label AS device_label, cl.scopes, cl.created_at, cl.last_seen_at, cl.verified_at,
+                COALESCE(cu.delivered_seq, 0) AS delivered_seq, COALESCE(cu.last_seen_seq, 0) AS read_seq
          FROM clients cl JOIN users u ON u.id = cl.user_id JOIN devices d ON d.id = cl.device_id
+         LEFT JOIN cursors cu ON cu.consumer_kind = 'client' AND cu.consumer_id = cl.id AND cu.project_id = cl.project_id
          WHERE cl.project_id = ? AND cl.revoked_at IS NULL AND d.revoked_at IS NULL AND (? OR cl.user_id = ?)
          ORDER BY cl.created_at DESC`,
       )
@@ -227,6 +230,7 @@ export function revokeClient(ctx: AppContext, clientId: string, actorUserId: str
     const row = ctx.db.prepare("SELECT project_id FROM clients WHERE id = ?").get(clientId) as { project_id: string };
     ctx.db.prepare("UPDATE clients SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").run(now, clientId);
     expireLeases(ctx, { clientId });
+    wakeAuthChanged();
     audit(ctx, { projectId: row.project_id, actorUserId, action, objectType: "client", objectId: clientId });
   })();
 }

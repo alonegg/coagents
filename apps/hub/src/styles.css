@@ -61,3 +61,8 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); w
 .superseded { opacity: 0.6; }
 h2.first { margin-top: 0; }
 @media (max-width: 720px) { .board { grid-template-columns: repeat(5, 75vw); } }
+.live { color: #2e7d4f; }
+@media (prefers-color-scheme: dark) { .live { color: #7fd1a0; } }
+.bell { position: relative; }
+.count { display: inline-block; margin-left: 4px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 0.75rem; text-align: center; }
+.popover { position: absolute; right: 0; top: 28px; z-index: 10; width: min(360px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.15); }

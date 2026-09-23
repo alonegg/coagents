@@ -1,6 +1,12 @@
 {$COAGENTS_DOMAIN} {
-	encode zstd gzip
-	reverse_proxy 127.0.0.1:8787
+	# Event streams must reach clients unbuffered and uncompressed.
+	@stream path */stream
+	@notstream not path */stream
+	encode @notstream zstd gzip
+	reverse_proxy @stream 127.0.0.1:8787 {
+		flush_interval -1
+	}
+	reverse_proxy @notstream 127.0.0.1:8787
 	log {
 		output file /var/log/caddy/coagents-access.log {
 			roll_size 20MiB

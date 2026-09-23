@@ -5,6 +5,7 @@ import { requireAuth, type Env } from "../auth.js";
 import { nowIso, type AppContext } from "../context.js";
 import { notFound } from "../http-error.js";
 import { expireLeases } from "../tasks.js";
+import { wakeAuthChanged } from "../bus.js";
 
 export function deviceRoutes(ctx: AppContext): Hono<Env> {
   const r = new Hono<Env>();
@@ -33,6 +34,7 @@ export function deviceRoutes(ctx: AppContext): Hono<Env> {
         ctx.db.prepare("UPDATE sessions SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL").run(now, id);
         ctx.db.prepare("UPDATE clients SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL").run(now, id);
         expireLeases(ctx, { deviceId: id });
+        wakeAuthChanged();
         audit(ctx, { projectId: null, actorUserId: auth.user.id, action: "device.revoke", objectType: "device", objectId: id });
       }
       return res.changes;

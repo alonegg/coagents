@@ -3,6 +3,7 @@ import type { Context, MiddlewareHandler } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { nowIso, type AppContext } from "./context.js";
 import { HttpError } from "./http-error.js";
+import { wakeAuthChanged } from "./bus.js";
 import { hashSecret, newId, newSecret } from "./ids.js";
 
 export const SESSION_COOKIE = "coagents_session";
@@ -154,6 +155,7 @@ export function startSession(ctx: AppContext, c: Context<Env>, user: UserView): 
 
 export function endSession(ctx: AppContext, c: Context<Env>, sessionId: string): void {
   ctx.db.prepare("UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").run(nowIso(ctx), sessionId);
+  wakeAuthChanged();
   deleteCookie(c, SESSION_COOKIE, { path: "/", secure: secureCookies(ctx) });
 }
 
@@ -181,4 +183,16 @@ export class LoginLimiter {
   succeed(key: string): void {
     this.failures.delete(key);
   }
+}
+
+// Used by long-lived streams to re-check a session on every delivery.
+export function sessionStillValid(ctx: AppContext, sessionId: string): boolean {
+  return (
+    ctx.db
+      .prepare(
+        `SELECT 1 FROM sessions s JOIN devices d ON d.id = s.device_id JOIN users u ON u.id = s.user_id
+         WHERE s.id = ? AND s.revoked_at IS NULL AND s.expires_at > ? AND d.revoked_at IS NULL AND u.auth_state = 'active'`,
+      )
+      .get(sessionId, nowIso(ctx)) !== undefined
+  );
 }

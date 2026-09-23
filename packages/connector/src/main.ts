@@ -9,6 +9,7 @@ import { claudeCodeConfigPath, claudeCodeFormat } from "./adapters/claude-code.j
 import { findProjectBinding } from "./binding.js";
 import { login } from "./login.js";
 import { ServiceClient } from "./service.js";
+import { EventStream } from "./sse.js";
 import { createConnectorServer, type ConnectorState } from "./server.js";
 import { coagentsHome, deleteCredential, loadCredential } from "./store.js";
 
@@ -72,7 +73,27 @@ async function main(): Promise<void> {
 
   switch (command) {
     case "mcp": {
-      await createConnectorServer(state(dir)).connect(new StdioServerTransport());
+      const s = state(dir);
+      if (s.ok) {
+        // Keep a live event stream while the client runs, so the server records delivery to this device.
+        // Delivered is not read: the agent still reads and acknowledges through get_context / ack_events.
+        let detail: string | undefined;
+        const svc = new ServiceClient(s.credential.server, s.credential.agent_token);
+        const start = await svc.call<{ last_seen_seq: number }>("GET", `/projects/${s.credential.project_id}/cursor`).catch(() => ({ last_seen_seq: 0 }));
+        const stream = new EventStream({
+          url: (c) => `${s.credential.server}/v1/projects/${s.credential.project_id}/stream?cursor=${c}`,
+          headers: { authorization: `Bearer ${s.credential.agent_token}`, "user-agent": "coagents-connector/0.1" },
+          cursor: start.last_seen_seq,
+          onEvent: () => {},
+          onState: (st, d) => {
+            detail = d;
+            if (st === "revoked") say(`coagents: live stream ended: access revoked (${d ?? ""})`);
+          },
+        });
+        void stream.run();
+        s.stream = () => ({ state: stream.state, last_delivered_seq: stream.cursor, ...(detail ? { detail } : {}) });
+      }
+      await createConnectorServer(s).connect(new StdioServerTransport());
       return;
     }
     case "login": {

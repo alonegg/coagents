@@ -1,6 +1,7 @@
 import type { UserView } from "@coagents/contract";
 import { nowIso, type AppContext } from "./context.js";
 import { HttpError } from "./http-error.js";
+import { wakeAuthChanged } from "./bus.js";
 import { newId } from "./ids.js";
 import { hashPassword } from "./passwords.js";
 
@@ -56,6 +57,7 @@ export async function resetPassword(ctx: AppContext, username: string, password:
     ctx.db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, user.id);
     ctx.db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").run(now, user.id);
   })();
+  wakeAuthChanged();
   return getUser(ctx, user.id)!;
 }
 

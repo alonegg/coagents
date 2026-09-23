@@ -1,6 +1,7 @@
 import type { EventPage, EventView, ProjectView, SessionView } from "@coagents/contract";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, formatTime } from "../api.js";
+import { LIVE_LABEL, useEventStream } from "../stream.js";
 
 // Peer text is untrusted: rendered as plain text only, never as HTML or commands.
 export function ActivityTab({ project, session }: { project: ProjectView; session: SessionView }) {
@@ -31,16 +32,19 @@ export function ActivityTab({ project, session }: { project: ProjectView; sessio
     }
   }, [project.id, cursor]);
 
+  const live = useEventStream(`/v1/projects/${project.id}/stream`, "event", () => void pull());
   useEffect(() => {
     void pull();
-    const t = setInterval(() => void pull(), 10_000);
+    if (live === "live") return;
+    const t = setInterval(() => void pull(), 30_000);
     return () => clearInterval(t);
-  }, [pull]);
+  }, [pull, live]);
 
   const tz = session.user.timezone;
   return (
     <>
-      {error && <p className="error">连接中断：{error}</p>}
+      <p className="muted sync"><span className={live === "live" ? "live" : "warn"}>{LIVE_LABEL[live]}</span></p>
+      {error && <p className="error">加载失败：{error}</p>}
       {events.length === 0 && !error && <p className="muted">暂无活动。</p>}
       <ol className="timeline">
         {[...events].reverse().map((e) => (

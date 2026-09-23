@@ -10,6 +10,7 @@ import {
   ReasonedReviewInput,
   ReviewInput,
   TaskStatus,
+  type EventView,
   type Permission,
 } from "@coagents/contract";
 import { Hono, type Context } from "hono";
@@ -17,9 +18,11 @@ import { projectAccess, requireActive, requirePermission, type ProjectAccess } f
 import { requireAuth, type Env } from "../auth.js";
 import type { Actor, AppContext } from "../context.js";
 import { listDecisions, publishDecision, publishGeneralBlocker } from "../decisions.js";
-import { ackCursor, listEvents, MAX_EVENT_PAGE, readCursor } from "../events.js";
+import { ackCursor, listEvents, markStreamDelivered, MAX_EVENT_PAGE, readCursor } from "../events.js";
+import { resumeCursor, sse } from "../stream.js";
+import { sessionStillValid } from "../auth.js";
 import { invalid, notAllowed, notFound } from "../http-error.js";
-import { requireAgentPermission, type AgentState } from "../agents.js";
+import { clientStillValid, requireAgentPermission, type AgentState } from "../agents.js";
 import { idempotent, type StoredResult } from "../idempotency.js";
 import {
   blockTask,
@@ -203,6 +206,33 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
     const limit = Math.min(Number(c.req.query("limit") ?? 50), MAX_EVENT_PAGE);
     if (!Number.isInteger(cursor) || cursor < 0 || !Number.isInteger(limit) || limit < 1) throw invalid("Bad cursor or limit");
     return c.json(listEvents(ctx, access.projectId, cursor, limit));
+  });
+
+  // Live events for this project. Re-authorizes the session or agent and project membership before
+  // every delivery, so a revoked device, client or member stops receiving immediately.
+  r.get("/:id/stream", (c) => {
+    const resolved = actorFor(ctx, c);
+    const { actor, access, agent } = resolved;
+    const sessionId = c.get("auth")?.sessionId;
+    const consumer = consumerOf(actor);
+    const latest = (ctx.db.prepare("SELECT COALESCE(MAX(seq), 0) AS m FROM events WHERE project_id = ?").get(access.projectId) as { m: number }).m;
+    return sse(c, ctx, {
+      topics: [`project:${access.projectId}`],
+      cursor: resumeCursor(c, latest),
+      eventName: "event",
+      authorize: () => {
+        try {
+          if (agent ? !clientStillValid(ctx, agent.clientId) : !sessionId || !sessionStillValid(ctx, sessionId)) return false;
+          const now = projectAccess(ctx, actor.userId, access.projectId);
+          if (agent) requireAgentPermission(agent, now.role, "project.read");
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      fetch: (cursor) => ({ items: listEvents(ctx, access.projectId, cursor, MAX_EVENT_PAGE).events, cursorOf: (e: EventView) => e.seq }),
+      onDelivered: (seq) => markStreamDelivered(ctx, consumer, access.projectId, seq),
+    });
   });
 
   // Consumers confirm what they processed; the stored cursor never moves backwards.

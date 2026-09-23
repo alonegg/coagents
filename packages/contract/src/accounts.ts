@@ -156,5 +156,7 @@ export const AgentConnectionView = z.object({
   created_at: z.string(),
   last_seen_at: z.string().nullable(),
   verified_at: z.string().nullable(),
+  delivered_seq: z.number(),
+  read_seq: z.number(),
 });
 export type AgentConnectionView = z.infer<typeof AgentConnectionView>;

@@ -23,6 +23,7 @@ cd "/opt/coagents/releases/$RELEASE"
 pnpm install --frozen-lockfile --registry="$REGISTRY" --reporter=append-only | tail -3
 pnpm build | tail -2
 install -m 0644 deploy/coagents.service /etc/systemd/system/coagents.service
+COAGENTS_DOMAIN=x caddy validate --config deploy/Caddyfile --adapter caddyfile >/dev/null
 install -m 0644 deploy/Caddyfile /etc/caddy/Caddyfile
 install -m 0755 deploy/coagents-admin /usr/local/bin/coagents-admin
 ln -sfn "/opt/coagents/releases/$RELEASE" /opt/coagents/current.new && mv -Tf /opt/coagents/current.new /opt/coagents/current

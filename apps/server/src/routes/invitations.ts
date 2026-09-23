@@ -6,6 +6,7 @@ import { nowIso, type AppContext } from "../context.js";
 import { HttpError } from "../http-error.js";
 import { hashSecret } from "../ids.js";
 import { createUser } from "../users.js";
+import { appendEvent } from "../events.js";
 import { parseBody } from "../validate.js";
 
 interface PendingInvitation {
@@ -86,6 +87,13 @@ export function invitationRoutes(ctx: AppContext): Hono<Env> {
       ctx.db
         .prepare("INSERT INTO memberships (project_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)")
         .run(inv.project_id, auth.user.id, inv.role, now);
+      appendEvent(ctx, inv.project_id, { kind: "user", userId: auth.user.id, displayName: auth.user.display_name, deviceId: auth.deviceId, clientId: null }, {
+        kind: "member.joined",
+        subjectType: "user",
+        subjectId: auth.user.id,
+        summary: `以 ${inv.role} 身份加入项目`,
+        data: { role: inv.role },
+      });
       audit(ctx, {
         projectId: inv.project_id,
         actorUserId: auth.user.id,

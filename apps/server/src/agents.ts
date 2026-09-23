@@ -58,3 +58,14 @@ export function requireAgentPermission(agent: AgentState, role: ProjectRole, per
 export function isAgent(c: Context<Env>): boolean {
   return c.get("agent") != null;
 }
+
+export function clientStillValid(ctx: AppContext, clientId: string): boolean {
+  return (
+    ctx.db
+      .prepare(
+        `SELECT 1 FROM clients cl JOIN devices d ON d.id = cl.device_id JOIN users u ON u.id = cl.user_id
+         WHERE cl.id = ? AND cl.revoked_at IS NULL AND d.revoked_at IS NULL AND u.auth_state = 'active'`,
+      )
+      .get(clientId) !== undefined
+  );
+}

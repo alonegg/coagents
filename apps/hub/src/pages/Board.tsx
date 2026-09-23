@@ -2,6 +2,7 @@ import type { ProjectView, SessionView, TaskStatus, TaskView } from "@coagents/c
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, formatTime, requestId, STATUS_LABEL } from "../api.js";
 import { go } from "../router.js";
+import { LIVE_LABEL, useEventStream } from "../stream.js";
 import { TaskDetail } from "./TaskDetail.js";
 
 const COLUMNS: TaskStatus[] = ["todo", "in_progress", "blocked", "review", "done"];
@@ -27,11 +28,14 @@ export function BoardTab({ project, session, taskId }: { project: ProjectView; s
     }
   }, [project.id]);
 
+  const live = useEventStream(`/v1/projects/${project.id}/stream`, "event", () => void load());
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 10_000);
+    // Polling only while the live stream is down.
+    if (live === "live") return;
+    const t = setInterval(() => void load(), 30_000);
     return () => clearInterval(t);
-  }, [load]);
+  }, [load, live]);
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -52,7 +56,9 @@ export function BoardTab({ project, session, taskId }: { project: ProjectView; s
   return (
     <>
       <p className="muted sync">
-        {error ? <span className="error">连接中断：{error}</span> : null}
+        <span className={live === "live" ? "live" : "warn"}>{LIVE_LABEL[live]}</span>
+        {" · "}
+        {error ? <span className="error">加载失败：{error}</span> : null}
         {syncedAt && <> 上次同步 {formatTime(syncedAt.toISOString(), tz)}</>}
         {" · "}
         {total === 0 ? "暂无任务" : `已完成 ${done} / ${total}`}
