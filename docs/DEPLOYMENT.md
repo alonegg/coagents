@@ -1,6 +1,6 @@
 # 部署环境
 
-状态：主机已接入，CoAgents 尚未部署。本文件是主机、地址、登录方式的唯一记录处，其他文档只引用这里。
+状态：已部署（2026-09-23 起）。本文件是主机、地址、登录方式的唯一记录处，其他文档只引用这里。
 
 | 项 | 值 |
 | --- | --- |
@@ -12,9 +12,20 @@
 | LAN 路径 | 待定 |
 | 保留的云厂商代理 | proxima、assist-client、cloud-monitor-agent（勿删） |
 
+| 服务布局 | 代码 `/opt/coagents/current`（指向 `releases/<时间>-<commit>`，保留 5 个）；数据 `/var/lib/coagents`；配置 `/etc/coagents/coagents.env`；Node 固定在 `/opt/coagents/node` |
+| 进程 | systemd `coagents`（服务用户 coagents，监听 127.0.0.1:8787）；`caddy` 终止 HTTPS（Let's Encrypt，HTTP-01 自动续期） |
+
+## 常用命令
+
 ```bash
 ssh -i ~/<ssh-key>.pem root@<server-ip>
+deploy/deploy.sh                                   # 从开发机构建并滚动发布当前工作树
+bash deploy/bootstrap-host.sh coagents.chengdu80.org   # 新主机一次性初始化，在主机上以 root 运行
+printf '%s' "$PW" | coagents-admin reset-password --username <用户>   # 主机上重置密码并撤销其全部会话 # [待验证]
+journalctl -u coagents -f                          # 服务日志
 ```
+
+实例维护账户为 `alone`；账户密码与验收账户密码只保存在开发机 `~/.coagents-secrets/accounts.env`（0600），不进仓库。
 
 ## 已知风险
 

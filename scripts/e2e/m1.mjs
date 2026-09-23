@@ -86,7 +86,7 @@ async function join() {
   await assertCertificateRejected();
 }
 
-// A client connecting by IP must fail certificate verification rather than silently trust the server.
+// The server must not answer an unknown server name with some fallback certificate.
 function assertCertificateRejected() {
   const host = new URL(HUB).hostname;
   return new Promise((resolve, reject) => {
@@ -96,7 +96,7 @@ function assertCertificateRejected() {
         reject(new Error("TLS connection with a wrong server name was accepted"));
       });
       socket.on("error", (err) => {
-        step(`TLS with wrong server name rejected (${err.code})`);
+        step(`server refuses TLS for an unknown server name, no fallback certificate (${err.code})`);
         resolve();
       });
     }, reject);
