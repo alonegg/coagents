@@ -11,3 +11,5 @@ coverage/
 .DS_Store
 .coagents-data/
 .playwright-mcp/
+packages/connector/.pkg/
+*.tgz

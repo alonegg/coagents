@@ -1,14 +1,35 @@
 {
-  "name": "@coagents/connector",
-  "version": "0.0.0",
-  "private": true,
+  "name": "coagents",
+  "version": "0.1.0",
+  "description": "CoAgents Connector: connect Claude Code or Codex to a self-hosted CoAgents team service over MCP (tasks, leases, handoffs, artifacts, search).",
+  "license": "MIT",
   "type": "module",
+  "homepage": "https://coagents.chengdu80.org",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude-code",
+    "codex",
+    "agents",
+    "collaboration",
+    "kanban"
+  ],
   "bin": {
-    "coagents": "./dist/main.js"
+    "coagents": "./bin/coagents.js"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "bundle": "node scripts/bundle.mjs"
   },
   "dependencies": {
-    "@coagents/contract": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^4.6.5"
-  }
+  },
+  "devDependencies": {
+    "@coagents/contract": "workspace:*",
+    "esbuild": "^0.28.2"
+  },
+  "private": true
 }

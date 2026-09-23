@@ -19,14 +19,28 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
-        if: inputs.milestone == 'm6' || inputs.milestone == 'm9-clean'
+        if: inputs.milestone == 'm6' || inputs.milestone == 'm9-clean' || inputs.milestone == 'npm-clean'
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           package-manager-cache: false
       # The Connector is built only for runs that act as an agent on this machine.
-      - if: inputs.milestone == 'm6' || inputs.milestone == 'm9-clean'
-        run: pnpm install --frozen-lockfile && pnpm -F @coagents/contract -F @coagents/connector exec tsc -b
+      - if: inputs.milestone == 'm6' || inputs.milestone == 'm9-clean' || inputs.milestone == 'npm-clean'
+        run: pnpm install --frozen-lockfile && pnpm -F @coagents/contract -F coagents exec tsc -b
+      # The published package, installed globally from the tarball exactly as users will get it.
+      - if: inputs.milestone == 'npm-clean'
+        run: |
+          pnpm -F coagents bundle
+          (cd packages/connector/.pkg && npm pack --silent)
+          npm install -g ./packages/connector/.pkg/coagents-*.tgz
+          COAGENTS_BIN=coagents node scripts/e2e/m9-clean.mjs run
+          npm uninstall -g coagents
+          test ! -e "$(npm prefix -g)/bin/coagents" && test ! -e "$(npm root -g)/coagents" && echo "ok - npm uninstall left no global files"
+        env:
+          COAGENTS_HUB: ${{ secrets.COAGENTS_HUB }}
+          E2E_PAYLOAD: ${{ secrets.E2E_PAYLOAD }}
+          E2E_CONTRIB_USER: ${{ secrets.E2E_CONTRIB_USER }}
+          E2E_CONTRIB_PASSWORD: ${{ secrets.E2E_CONTRIB_PASSWORD }}
       - if: inputs.milestone == 'load'
         run: node scripts/load/capacity.mjs ${{ inputs.phase }}
         env:
@@ -44,7 +58,7 @@ jobs:
           E2E_PAYLOAD: ${{ secrets.E2E_PAYLOAD }}
           E2E_CONTRIB_USER: ${{ secrets.E2E_CONTRIB_USER }}
           E2E_CONTRIB_PASSWORD: ${{ secrets.E2E_CONTRIB_PASSWORD }}
-      - if: inputs.milestone != 'load' && inputs.milestone != 'm9-skew'
+      - if: inputs.milestone != 'load' && inputs.milestone != 'm9-skew' && inputs.milestone != 'npm-clean'
         run: node scripts/e2e/${{ inputs.milestone }}.mjs ${{ inputs.phase }}
         env:
           COAGENTS_HUB: ${{ secrets.COAGENTS_HUB }}

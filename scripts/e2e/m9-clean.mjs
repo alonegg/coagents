@@ -10,7 +10,8 @@ import { join, resolve } from "node:path";
 import { HubClient, env, step } from "./client.mjs";
 
 const HUB = env("COAGENTS_HUB");
-const CLI = resolve("packages/connector/dist/main.js");
+// COAGENTS_BIN runs an installed `coagents` command (e.g. from the npm package); default: repo build.
+const BIN = process.env.COAGENTS_BIN ? [process.env.COAGENTS_BIN] : ["node", resolve("packages/connector/dist/main.js")];
 const home = homedir();
 
 function tree(dir) {
@@ -37,7 +38,7 @@ async function run() {
 
   const person = new HubClient(HUB, "contrib-clean");
   await person.login(env("E2E_CONTRIB_USER"), env("E2E_CONTRIB_PASSWORD"));
-  const child = spawn("node", [CLI, "login", "--server", HUB, "--project", project_id, "--label", "clean-machine check", "--dir", project], { stdio: ["ignore", "ignore", "pipe"] });
+  const child = spawn(BIN[0], [...BIN.slice(1), "login", "--server", HUB, "--project", project_id, "--label", "clean-machine check", "--dir", project], { stdio: ["ignore", "ignore", "pipe"] });
   let err = "";
   let approved = false;
   child.stderr.on("data", (d) => {
@@ -49,7 +50,8 @@ async function run() {
     }
   });
   await new Promise((res, rej) => child.on("exit", (c) => (c === 0 ? res() : rej(new Error(err)))));
-  const cli = (...a) => execFileSync("node", [CLI, ...a], { cwd: project, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const cli = (...a) => execFileSync(BIN[0], [...BIN.slice(1), ...a], { cwd: project, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  step(`client under test: ${BIN.join(" ")} ${cli("--version").trim()}`);
   cli("install", "claude-code", "--yes", "--dir", project);
   cli("install", "codex", "--yes");
   assert.ok(existsSync(join(project, ".mcp.json")) && existsSync(join(home, ".codex", "config.toml")));
@@ -65,7 +67,7 @@ async function run() {
   assert.equal(existsSync(join(home, ".coagents")), false);
   assert.equal(existsSync(join(home, ".codex")), before.codex);
   // The bracket keeps this check from matching its own command line.
-  const procs = execFileSync("sh", ["-c", `pgrep -fl "connector/dist/main[.]js" || true`], { encoding: "utf8" }).trim();
+  const procs = execFileSync("sh", ["-c", `pgrep -fl "connector/dist/main[.]js|bin/coagents[.]js" || true`], { encoding: "utf8" }).trim();
   assert.equal(procs, "");
   const revoked = await fetch(`${HUB}/v1/agent/me`, { headers: { authorization: `Bearer ${agentToken}` } });
   assert.equal(revoked.status, 401);

@@ -13,7 +13,7 @@ import { findProjectBinding } from "./binding.js";
 import { login } from "./login.js";
 import { ServiceClient } from "./service.js";
 import { EventStream } from "./sse.js";
-import { createConnectorServer, type ConnectorState } from "./server.js";
+import { CONNECTOR_VERSION, createConnectorServer, type ConnectorState } from "./server.js";
 import { coagentsHome, deleteCredential, forgetClientLeases, loadCredential, pruneHome } from "./store.js";
 import { rmdirSync, rmSync } from "node:fs";
 
@@ -26,7 +26,8 @@ const USAGE = `coagents — CoAgents Connector
   coagents uninstall codex
   coagents status [--dir <path>]
   coagents tool <name> [json-args] [--dir <path>]   Call one MCP tool and print the result
-  coagents mcp            Run the stdio MCP server (what the client launches)`;
+  coagents mcp            Run the stdio MCP server (what the client launches)
+  coagents --version`;
 
 const ADAPTERS: Record<string, { format: ConfigFormat; path: (dir: string) => string }> = {
   "claude-code": { format: claudeCodeFormat, path: claudeCodeConfigPath },
@@ -35,9 +36,11 @@ const ADAPTERS: Record<string, { format: ConfigFormat; path: (dir: string) => st
 
 const say = (line: string) => process.stderr.write(`${line}\n`);
 
-// The client launches this exact node binary and entry file, so installs work without a global package.
+// The client launches this exact node binary and this entry file (dist/main.js in the repository,
+// bin/coagents.js in the npm package). Absolute paths work even where the client has no shell PATH;
+// after moving Node or the package, run install again.
 function ourEntry(): McpEntry {
-  return { name: "coagents", command: process.execPath, args: [resolve(dirname(fileURLToPath(import.meta.url)), "main.js"), "mcp"] };
+  return { name: "coagents", command: process.execPath, args: [fileURLToPath(import.meta.url), "mcp"] };
 }
 
 function state(dir: string): ConnectorState {
@@ -81,6 +84,10 @@ async function main(): Promise<void> {
   const dir = resolve(values.dir ?? process.cwd());
 
   switch (command) {
+    case "--version":
+    case "-v":
+      process.stdout.write(`${CONNECTOR_VERSION}\n`);
+      return;
     case "mcp": {
       const s = state(dir);
       if (s.ok) {
