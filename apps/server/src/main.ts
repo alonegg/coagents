@@ -9,13 +9,14 @@ import type { AppContext } from "./context.js";
 import { openDb } from "./db.js";
 import { hubStatic } from "./hub-static.js";
 import { drainIndexQueue, enqueueIndex, resumeIndexing } from "./search.js";
-import { createUser, resetPassword, userCount } from "./users.js";
+import { createUser, disableUser, resetPassword, userCount } from "./users.js";
 
 const USAGE = `Usage:
   coagents-server serve
   coagents-server setup --username <name> --display-name <name> [--timezone <IANA>] < password
   coagents-server reset-password --username <name> < password
   coagents-server reindex
+  coagents-server disable-user --username <name>
 
 Environment: COAGENTS_DATA_DIR, COAGENTS_PUBLIC_URL, COAGENTS_HOST, COAGENTS_PORT, COAGENTS_HUB_DIR`;
 
@@ -78,6 +79,11 @@ async function main(): Promise<void> {
       for (const { id } of ids) enqueueIndex(ctx, id);
       await drainIndexQueue(ctx);
       console.log(`reindexed ${ids.length} published versions`);
+      return;
+    }
+    case "disable-user": {
+      const user = disableUser(ctx, Username.parse(values.username));
+      console.log(`disabled ${user.username}; sessions and agent connections revoked`);
       return;
     }
     case "reset-password": {

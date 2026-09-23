@@ -64,3 +64,19 @@ export async function resetPassword(ctx: AppContext, username: string, password:
 export function userCount(ctx: AppContext): number {
   return (ctx.db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number }).n;
 }
+
+// Instance maintainers disable an account from the server host: sign-in stops, every session and
+// agent connection ends at once, and leases it holds lapse. Project data it created stays.
+export function disableUser(ctx: AppContext, username: string): UserView {
+  const user = findUserForLogin(ctx, username);
+  if (!user) throw new HttpError(404, "forbidden_or_not_found", `No user named ${username}`);
+  const now = nowIso(ctx);
+  ctx.db.transaction(() => {
+    ctx.db.prepare("UPDATE users SET auth_state = 'disabled' WHERE id = ?").run(user.id);
+    ctx.db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").run(now, user.id);
+    ctx.db.prepare("UPDATE clients SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").run(now, user.id);
+    ctx.db.prepare("UPDATE tasks SET lease_until = ?, version = version + 1, updated_at = ? WHERE holder_user_id = ? AND lease_until > ?").run(now, now, user.id, now);
+  })();
+  wakeAuthChanged();
+  return getUser(ctx, user.id)!;
+}

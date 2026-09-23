@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Browser, PUBLIC_URL, seedUser, testEnv } from "./test-helpers.js";
-import { resetPassword } from "./users.js";
+import { disableUser, resetPassword } from "./users.js";
 
 describe("health", () => {
   it("reports version and schema", async () => {
@@ -59,6 +59,14 @@ describe("sessions", () => {
     const crossOrigin = await lin.req("POST", "/v1/projects", { name: "x" }, { origin: "https://evil.test" });
     expect(crossOrigin.status).toBe(403);
     expect((await lin.req("POST", "/v1/projects", { name: "x" }, { origin: PUBLIC_URL })).status).toBe(201);
+  });
+
+  it("disabling a user stops sign-in and ends sessions", async () => {
+    const env = testEnv();
+    const lin = await seedUser(env, "lin");
+    disableUser(env.ctx, "lin");
+    expect((await lin.json("GET", "/v1/session")).status).toBe(401);
+    expect(await new Browser(env.app).login("lin")).toBe(401);
   });
 
   it("password reset revokes every session of the user", async () => {
