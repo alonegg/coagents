@@ -19,13 +19,39 @@
 
 ```bash
 ssh -i ~/<ssh-key>.pem root@<server-ip>
-deploy/deploy.sh                                   # 从开发机构建并滚动发布当前工作树
-bash deploy/bootstrap-host.sh coagents.chengdu80.org   # 新主机一次性初始化，在主机上以 root 运行
-printf '%s' "$PW" | coagents-admin reset-password --username <用户>   # 主机上重置密码并撤销其全部会话 # [待验证]
-journalctl -u coagents -f                          # 服务日志
+deploy/deploy.sh                                        # 开发机上构建并滚动发布当前工作树（保留 5 个版本）
+bash deploy/bootstrap-host.sh coagents.chengdu80.org    # 新主机一次性初始化，在主机上以 root 运行
+journalctl -u coagents -f                               # 服务日志
 ```
 
-实例维护账户为 `alone`；账户密码与验收账户密码只保存在开发机 `~/.coagents-secrets/accounts.env`（0600），不进仓库。
+## 账户与身份恢复
+
+实例维护账户为 `alone`；密码与验收账户密码只保存在开发机 `~/.coagents-secrets/accounts.env`（0600），不进仓库。以下命令在主机上以 root 运行，密码从标准输入读取，不出现在命令行或历史记录中。
+
+```bash
+printf '%s' "$PW" | coagents-admin setup --username <用户> --display-name <显示名> --timezone Asia/Shanghai   # 仅首次，实例已有用户时拒绝
+printf '%s' "$PW" | coagents-admin reset-password --username <用户>   # 重置密码并撤销其全部会话 # [待验证]
+coagents-admin disable-user --username <用户>                          # 停用账户，撤销会话与 Agent 连接
+coagents-admin reindex                                                 # 从受管成果重建全文索引 # [待验证]
+```
+
+Owner 忘记密码时，由实例维护者用 `reset-password` 恢复；项目所有权不受影响。
+
+## 备份与恢复
+
+数据全部在 `/var/lib/coagents`（SQLite 数据库与 `files/` 下的成果文件）。2026-09-23 演练：停服 672 ms 完成打包；备份恢复到临时目录后以独立实例启动，健康检查正常，项目、任务、事件、成果版本、文件、用户、Agent 连接计数与线上逐项一致，文件 SHA-256 一致，重建索引 8/8 就绪。
+
+```bash
+systemctl stop coagents && tar -C /var/lib -czf /root/coagents-backup-$(date +%Y%m%d%H%M%S).tgz coagents && systemctl start coagents
+# 原地恢复：
+systemctl stop coagents && mv /var/lib/coagents /var/lib/coagents.before-restore && tar -C /var/lib -xzf /root/coagents-backup-<时间>.tgz && chown -R coagents:coagents /var/lib/coagents && systemctl start coagents   # [待验证]
+```
+
+备份包含凭证哈希与全部成果，按敏感数据保管（主机上为 0600）。最近一次备份：`/root/coagents-backup-20260923234049.tgz`。
+
+## 验收数据
+
+实例上保留验收产生的测试数据：账户 `e2e-contrib`、`e2e-viewer`（活跃）与 18 个 `load-*` 压测账户（已停用）；名称以 M1–M8 开头的项目为各里程碑验收项目，容量测试项目已软删除。正式使用前可按需归档或删除这些项目。
 
 ## 已知风险
 

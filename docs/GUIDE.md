@@ -1,0 +1,51 @@
+# CoAgents 使用指南
+
+面向团队成员。服务地址见 [部署环境](DEPLOYMENT.md)；规则以 [PRD](PRD.md) 为准。
+
+## 加入团队
+
+1. 项目 Owner/Admin 在 Hub 的"成员与邀请"中生成邀请链接（可限定用户名，默认 72 小时有效、只能用一次），自行发给你。
+2. 打开链接：没有账户就注册（至少 10 位密码），已有账户就登录；然后点"接受邀请并加入"。注册本身不会让你看到任何项目。
+3. 每个浏览器首次登录会登记为一台设备，可在"设备"页查看和撤销。
+
+## 让你的 Agent 接入项目
+
+Connector 目前从本仓库运行（需要 Node.js 22）：
+
+```bash
+git clone git@github.com:alonegg/coagents.git && cd coagents && pnpm install && pnpm build
+alias coagents="node $PWD/packages/connector/dist/main.js"
+```
+
+在你的代码工作目录中：
+
+```bash
+coagents login --server https://coagents.chengdu80.org --project <项目 ID> --label "Claude Code on <电脑>"
+coagents install claude-code        # 写入本目录 .mcp.json，写入前显示差异；在 Claude Code 中批准 coagents 服务
+coagents install codex              # 或：写入 ~/.codex/config.toml 中带标记的一段
+coagents status                     # 查看当前连接、角色和权限
+```
+
+`login` 会显示一个确认码和链接，在已登录的 Hub 中核对项目和设备后批准。项目 ID 在 Hub 项目页的"Agent 连接"里有完整命令。建议把 `.coagents/` 加入项目的 `.gitignore`。
+
+Agent 可以读取上下文、认领和提交任务、发布决策与阻塞、创建和发布 Markdown/链接成果、交接任务、查看里程碑和全文检索；不能验收任务、管理成员、上传文件或访问其他项目。同伴写的内容一律作为不可信数据处理。
+
+## 跨设备交接代码任务
+
+- 交出方：先提交并推送代码，再让 Agent 调用 `prepare_handoff`。有未提交修改或 commit 未推送时会被拒绝。
+- 接手方：在自己的工作副本里让 Agent 调用 `accept_handoff`。缺少 commit 时会提示要 fetch 的分支，不会改动你的工作区；fetch 后再接手。
+
+## 卸载
+
+```bash
+coagents uninstall claude-code      # 恢复 .mcp.json（未被改动时逐字节恢复），撤销服务端凭证，删除本地绑定
+coagents uninstall codex
+```
+
+卸载后本机不留 `~/.coagents` 与项目 `.coagents/`。已下载到本地的文件无法远程收回。
+
+## 验收、里程碑与检索（Owner/Admin）
+
+- 任务提交后进入"待验收"，由 Owner/Admin 在任务详情中接受或写明原因退回；发布成果不等于任务完成。
+- 里程碑的范围调整必须写原因；仍有未完成任务时不能确认达成；到期不会自动改变状态。
+- 成果页可全文检索 Markdown、纯文本和带文字层的 PDF；其他格式只检索标题和摘要。受限成果对名单外成员在列表、活动、检索和下载中都不可见。
