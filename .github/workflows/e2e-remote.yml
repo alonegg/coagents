@@ -21,6 +21,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          package-manager-cache: false
       - run: node scripts/e2e/${{ inputs.milestone }}.mjs ${{ inputs.phase }}
         env:
           COAGENTS_HUB: ${{ secrets.COAGENTS_HUB }}
