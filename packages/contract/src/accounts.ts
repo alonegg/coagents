@@ -54,6 +54,7 @@ export const ProjectView = z.object({
   description: z.string(),
   lifecycle: z.enum(["active", "archived"]),
   timezone: z.string(),
+  due_at: z.string().nullable(),
   role: ProjectRole,
   created_at: z.string(),
   updated_at: z.string(),

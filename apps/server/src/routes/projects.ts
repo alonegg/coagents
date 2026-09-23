@@ -26,7 +26,7 @@ function humanActor(auth: AuthState): Actor {
 }
 import { parseBody } from "../validate.js";
 
-const PROJECT_COLUMNS = "p.id, p.name, p.description, p.lifecycle, p.timezone, m.role, p.created_at, p.updated_at";
+const PROJECT_COLUMNS = "p.id, p.name, p.description, p.lifecycle, p.timezone, p.due_at, m.role, p.created_at, p.updated_at";
 
 function memberRole(ctx: AppContext, projectId: string, userId: string): ProjectRole | undefined {
   const row = ctx.db

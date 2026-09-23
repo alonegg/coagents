@@ -20,6 +20,7 @@ export const Permission = z.enum([
   "agent.revoke_any",
   "project.archive",
   "project.transfer_or_delete",
+  "milestone.manage",
 ]);
 export type Permission = z.infer<typeof Permission>;
 

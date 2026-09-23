@@ -67,10 +67,10 @@ export function TaskDetail({
     }, () => undefined);
   }, [project.id]);
 
-  async function act(path: string, body: Record<string, unknown>) {
+  async function act(path: string, body: Record<string, unknown>, method = "POST") {
     setError(null);
     try {
-      await api("POST", path, { ...body, request_id: requestId() });
+      await api(method, path, { ...body, request_id: requestId() });
       setText("");
       setEvidence("");
       setPicked([]);
@@ -104,6 +104,16 @@ export function TaskDetail({
         {task.holder
           ? <>{task.holder.display_name}（{task.holder.kind === "client" ? "Agent" : "人工"}），租约{task.holder.lease_active ? `至 ${formatTime(task.holder.lease_until, tz)}` : "已过期"}</>
           : "无"}
+      </p>
+      <p>
+        截止：{task.due_at ? <>{formatTime(task.due_at, tz)}{task.overdue && <span className="warn">（已逾期，状态不会因此自动改变）</span>}</> : "未设置"}
+        {writable && (
+          <>
+            {" "}<input type="date" aria-label="截止日期" onChange={(e) => e.target.value && act(`${base}/due`, { expected_version: v, due_at: e.target.value }, "PUT")} />
+            {task.due_at && <button className="link" onClick={() => act(`${base}/due`, { expected_version: v, due_at: null }, "PUT")}>清除</button>}
+            <small className="muted"> 按项目时区 {project.timezone} 当天结束计算</small>
+          </>
+        )}
       </p>
       {task.description && <p>{task.description}</p>}
       <h3>验收条件</h3>

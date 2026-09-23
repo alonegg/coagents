@@ -4,6 +4,22 @@ import { api, ApiError, formatTime, requestId } from "../api.js";
 import { go } from "../router.js";
 import { canWrite } from "./Board.js";
 
+interface SearchResult {
+  total: number;
+  pending: number;
+  hits: {
+    artifact_id: string;
+    artifact_version_id: string;
+    title: string;
+    version: number;
+    is_current: boolean;
+    index_state: string;
+    matched_in: "body" | "title";
+    snippet: string | null;
+    location: { page?: number; line?: number } | null;
+  }[];
+}
+
 export const KIND_LABEL: Record<string, string> = { markdown: "Markdown", file: "文件", link: "外部链接" };
 export const ARTIFACT_STATUS: Record<string, string> = { draft: "草稿", published: "已发布", deleted: "已删除" };
 
@@ -31,6 +47,20 @@ export function ArtifactsTab({ project, session }: { project: ProjectView; sessi
   const [sourceAuthor, setSourceAuthor] = useState("");
   const [sourceAt, setSourceAt] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const [q, setQ] = useState("");
+  const [history, setHistory] = useState(false);
+  const [results, setResults] = useState<SearchResult | null>(null);
+
+  async function runSearch(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      setResults(await api<SearchResult>("GET", `/projects/${project.id}/search?q=${encodeURIComponent(q)}${history ? "&scope=all" : ""}`));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    }
+  }
 
   const load = useCallback(() => {
     api<{ artifacts: ArtifactView[] }>("GET", `/projects/${project.id}/artifacts`).then((r) => setItems(r.artifacts), (e: ApiError) => setError(e.message));
@@ -66,6 +96,32 @@ export function ArtifactsTab({ project, session }: { project: ProjectView; sessi
   const tz = session.user.timezone;
   return (
     <>
+      <form onSubmit={runSearch} className="row">
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索成果正文与标题" aria-label="搜索成果" required />
+        <label className="row"><input type="checkbox" checked={history} onChange={(e) => setHistory(e.target.checked)} /> 包含历史版本</label>
+        <button>搜索</button>
+      </form>
+      {results && (
+        <section className="panel">
+          <p className="muted">
+            共 {results.total} 条结果{results.pending > 0 && `；另有 ${results.pending} 份成果正在建立索引，稍后再试`}。
+            <button className="link" onClick={() => setResults(null)}>清除</button>
+          </p>
+          <ul className="plain">
+            {results.hits.map((h) => (
+              <li key={h.artifact_version_id}>
+                <a href={`#/projects/${project.id}/artifacts/${h.artifact_id}`}>{h.title}</a> · v{h.version}
+                {!h.is_current && <span className="badge">历史版本</span>}
+                {h.location?.page && ` · 第 ${h.location.page} 页`}
+                {h.location?.line && ` · 第 ${h.location.line} 行`}
+                {h.matched_in === "title" && <span className="muted"> · 标题/摘要命中</span>}
+                {h.index_state === "unsupported" && <span className="muted"> · 此格式只检索标题和摘要</span>}
+                {h.snippet && <p className="pre quote">{h.snippet}</p>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {error && <p className="error">{error}</p>}
       {items?.length === 0 && <p className="muted">还没有你能查看的成果。</p>}
       {items && items.length > 0 && (

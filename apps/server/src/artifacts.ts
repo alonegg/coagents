@@ -6,6 +6,7 @@ import { appendEvent } from "./events.js";
 import { isPreviewable } from "./files.js";
 import { HttpError, invalid, notAllowed, notFound } from "./http-error.js";
 import { newId } from "./ids.js";
+import { enqueueIndex, reindexTitle } from "./search.js";
 import { artifactReadable, isManager, type Viewer } from "./visibility.js";
 
 interface ArtifactRow {
@@ -223,6 +224,7 @@ export function updateDraft(
   ctx.db
     .prepare("UPDATE artifacts SET title = COALESCE(?, title), summary = COALESCE(?, summary), updated_at = ? WHERE id = ?")
     .run(patch.title ?? null, patch.summary ?? null, now, artifactId);
+  if (patch.title !== undefined || patch.summary !== undefined) reindexTitle(ctx, artifactId);
   return getArtifact(ctx, projectId, viewer, artifactId);
 }
 
@@ -237,6 +239,7 @@ export function publishArtifact(ctx: AppContext, projectId: string, actor: Actor
   const now = nowIso(ctx);
   ctx.db.prepare("UPDATE artifact_versions SET state = 'published', version = ?, published_at = ? WHERE id = ?").run(next, now, draft.id);
   ctx.db.prepare("UPDATE artifacts SET status = 'published', current_version = ?, updated_at = ? WHERE id = ?").run(next, now, artifactId);
+  enqueueIndex(ctx, draft.id);
   appendEvent(ctx, projectId, actor, {
     kind: next === 1 ? "artifact.published" : "artifact.version_published",
     subjectType: "artifact",

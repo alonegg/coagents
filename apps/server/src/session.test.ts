@@ -7,7 +7,7 @@ describe("health", () => {
     const env = testEnv();
     const res = await new Browser(env.app).json("GET", "/v1/health");
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ status: "ok", schema_version: 7 });
+    expect(res.body).toMatchObject({ status: "ok", schema_version: 8 });
   });
 });
 

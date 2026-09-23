@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-export type ProjectTab = "board" | "artifacts" | "activity" | "decisions" | "agents" | "members";
-const TABS: readonly ProjectTab[] = ["board", "artifacts", "activity", "decisions", "agents", "members"];
+export type ProjectTab = "board" | "milestones" | "artifacts" | "activity" | "decisions" | "agents" | "members";
+const TABS: readonly ProjectTab[] = ["board", "milestones", "artifacts", "activity", "decisions", "agents", "members"];
 
 export type Route =
   | { name: "projects" }

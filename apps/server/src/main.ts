@@ -8,12 +8,14 @@ import { createApp } from "./app.js";
 import type { AppContext } from "./context.js";
 import { openDb } from "./db.js";
 import { hubStatic } from "./hub-static.js";
+import { drainIndexQueue, enqueueIndex, resumeIndexing } from "./search.js";
 import { createUser, resetPassword, userCount } from "./users.js";
 
 const USAGE = `Usage:
   coagents-server serve
   coagents-server setup --username <name> --display-name <name> [--timezone <IANA>] < password
   coagents-server reset-password --username <name> < password
+  coagents-server reindex
 
 Environment: COAGENTS_DATA_DIR, COAGENTS_PUBLIC_URL, COAGENTS_HOST, COAGENTS_PORT, COAGENTS_HUB_DIR`;
 
@@ -51,6 +53,7 @@ async function main(): Promise<void> {
       const host = process.env.COAGENTS_HOST ?? "127.0.0.1";
       const port = Number(process.env.COAGENTS_PORT ?? 8787);
       const hubDir = process.env.COAGENTS_HUB_DIR;
+      resumeIndexing(ctx);
       serve({ fetch: createApp(ctx, hubDir ? hubStatic(hubDir) : undefined).fetch, hostname: host, port }, (info) => {
         console.log(`coagents server listening on http://${info.address}:${info.port}`);
       });
@@ -66,6 +69,14 @@ async function main(): Promise<void> {
         instanceRole: "maintainer",
       });
       console.log(`created maintainer ${user.username} (${user.id})`);
+      return;
+    }
+    case "reindex": {
+      // Rebuilds the search index from managed artifact content (e.g. after restoring a backup).
+      const ids = ctx.db.prepare("SELECT id FROM artifact_versions WHERE state = 'published'").all() as { id: string }[];
+      for (const { id } of ids) enqueueIndex(ctx, id);
+      await drainIndexQueue(ctx);
+      console.log(`reindexed ${ids.length} published versions`);
       return;
     }
     case "reset-password": {

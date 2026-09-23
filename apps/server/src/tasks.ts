@@ -20,6 +20,8 @@ interface TaskRow {
   holder_name: string | null;
   lease_token_hash: string | null;
   lease_until: string | null;
+  milestone_id: string | null;
+  due_at: string | null;
   version: number;
   created_by: string;
   created_at: string;
@@ -64,6 +66,9 @@ function toView(row: TaskRow, now: string): TaskView {
             lease_active: leaseActive(row, now),
           }
         : null,
+    milestone_id: row.milestone_id,
+    due_at: row.due_at,
+    overdue: row.due_at !== null && row.status !== "done" && row.due_at < now,
     version: row.version,
     created_by: row.created_by,
     created_at: row.created_at,

@@ -9,8 +9,9 @@ import { ArtifactsTab } from "./Artifacts.js";
 import { BoardTab } from "./Board.js";
 import { DecisionsTab } from "./Decisions.js";
 import { MembersTab } from "./Members.js";
+import { MilestonesTab } from "./Milestones.js";
 
-const TAB_LABEL: Record<ProjectTab, string> = { board: "看板", artifacts: "成果", activity: "活动", decisions: "决策", agents: "Agent 连接", members: "成员与邀请" };
+const TAB_LABEL: Record<ProjectTab, string> = { board: "看板", milestones: "里程碑", artifacts: "成果", activity: "活动", decisions: "决策", agents: "Agent 连接", members: "成员与邀请" };
 
 export function ProjectPage({ route, session }: { route: { id: string; tab: ProjectTab; taskId?: string; artifactId?: string }; session: SessionView }) {
   const [project, setProject] = useState<ProjectView | null>(null);
@@ -31,13 +32,17 @@ export function ProjectPage({ route, session }: { route: { id: string; tab: Proj
       <p><a href="#/projects">← 我的项目</a></p>
       <h1>{project.name} <span className="badge">{ROLE_LABEL[project.role]}</span></h1>
       <p>{project.description || <span className="muted">暂无说明</span>}</p>
-      <p className="muted">项目时区 {project.timezone} · 最近更新 {formatTime(project.updated_at, session.user.timezone)}</p>
+      <p className="muted">
+        项目时区 {project.timezone} · 最近更新 {formatTime(project.updated_at, session.user.timezone)}
+        {project.due_at && <> · 项目截止 {formatTime(project.due_at, session.user.timezone)}{project.due_at < new Date().toISOString() && <span className="warn">（已逾期）</span>}</>}
+      </p>
       <nav className="tabs" aria-label="项目页面">
         {(Object.keys(TAB_LABEL) as ProjectTab[]).map((t) => (
           <a key={t} href={`#/projects/${project.id}/${t}`} aria-current={route.tab === t ? "page" : undefined}>{TAB_LABEL[t]}</a>
         ))}
       </nav>
       {route.tab === "board" && <BoardTab project={project} session={session} taskId={route.taskId} />}
+      {route.tab === "milestones" && <MilestonesTab project={project} session={session} />}
       {route.tab === "artifacts" && (route.artifactId ? <ArtifactDetail project={project} session={session} artifactId={route.artifactId} /> : <ArtifactsTab project={project} session={session} />)}
       {route.tab === "activity" && <ActivityTab project={project} session={session} />}
       {route.tab === "decisions" && <DecisionsTab project={project} session={session} />}

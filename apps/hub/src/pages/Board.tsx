@@ -75,6 +75,7 @@ export function BoardTab({ project, session, taskId }: { project: ProjectView; s
               {items.map((t) => (
                 <a key={t.id} href={`#/projects/${project.id}/tasks/${t.id}`} className={`task-card${t.id === taskId ? " selected" : ""}`}>
                   <strong>{t.title}</strong>
+                  {t.due_at && <small className={t.overdue ? "warn" : "muted"}>截止 {formatTime(t.due_at, tz)}{t.overdue ? "（已逾期）" : ""}</small>}
                   {t.holder && (
                     <small className={t.holder.lease_active ? "muted" : "warn"}>
                       {t.holder.kind === "client" ? "Agent" : "执行者"}：{t.holder.display_name}

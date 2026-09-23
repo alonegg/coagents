@@ -291,5 +291,23 @@ export function createConnectorServer(state?: ConnectorState): McpServer {
     },
   );
 
+  tool(
+    "list_milestones",
+    "List the project's milestones with due moments (UTC), whether they are overdue, and task counts per status.",
+    {},
+    async (_args, svc, cred) => svc.call("GET", `${p(cred)}/milestones`),
+  );
+
+  tool(
+    "search_artifacts",
+    "Full-text search in published artifacts you can read (Markdown, plain text, PDF text layers; titles and summaries for other types). " +
+      "Returns snippets with the version and page or line. Use scope 'all' to include older versions.",
+    { query: z.string().min(1).max(200), scope: z.enum(["current", "all"]).optional(), limit: z.number().int().min(1).max(50).optional() },
+    async (args, svc, cred) => {
+      const q = new URLSearchParams({ q: args.query, scope: args.scope ?? "current", limit: String(args.limit ?? 10) });
+      return { notice: UNTRUSTED_NOTICE, ...(await svc.call<object>("GET", `${p(cred)}/search?${q.toString()}`)) };
+    },
+  );
+
   return server;
 }

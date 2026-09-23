@@ -320,6 +320,40 @@ const MIGRATIONS: readonly string[] = [
   CREATE INDEX handoffs_by_task ON handoffs(task_id, created_at);
   CREATE UNIQUE INDEX one_pending_handoff_per_task ON handoffs(task_id) WHERE state = 'pending';
   `,
+  `
+  CREATE TABLE milestones (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    title TEXT NOT NULL,
+    criteria TEXT NOT NULL,
+    due_at TEXT,
+    state TEXT NOT NULL CHECK (state IN ('open', 'achieved')),
+    confirmed_by TEXT REFERENCES users(id),
+    confirmed_at TEXT,
+    confirm_note TEXT,
+    version INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX milestones_by_project ON milestones(project_id);
+  CREATE INDEX tasks_by_milestone ON tasks(milestone_id);
+
+  -- One row per indexed artifact version. text keeps the original extracted text for snippets;
+  -- the FTS table holds the CJK-segmented form used for matching.
+  CREATE TABLE search_docs (
+    artifact_version_id TEXT PRIMARY KEY REFERENCES artifact_versions(id),
+    artifact_id TEXT NOT NULL REFERENCES artifacts(id),
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    version INTEGER NOT NULL,
+    index_state TEXT NOT NULL CHECK (index_state IN ('pending', 'ready', 'unsupported', 'failed')),
+    text TEXT NOT NULL DEFAULT '',
+    pages TEXT,
+    error TEXT,
+    updated_at TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX search_docs_by_artifact ON search_docs(artifact_id);
+  CREATE VIRTUAL TABLE search_fts USING fts5(title, body, artifact_version_id UNINDEXED, tokenize = 'unicode61 remove_diacritics 2');
+  `,
 ];
 
 export function openDb(path: string): Db {
