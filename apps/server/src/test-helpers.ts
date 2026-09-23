@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Hono } from "hono";
 import { createApp } from "./app.js";
 import type { AppContext } from "./context.js";
@@ -18,7 +21,7 @@ export function testEnv(): TestEnv {
   const ctx: AppContext = {
     db: openDb(":memory:"),
     clock: () => new Date(now),
-    config: { publicUrl: PUBLIC_URL, sessionTtlHours: 24, leaseMinutes: 30 },
+    config: { publicUrl: PUBLIC_URL, sessionTtlHours: 24, leaseMinutes: 30, filesDir: mkdtempSync(join(tmpdir(), "coagents-files-")) },
   };
   return { ctx, app: createApp(ctx), advance: (ms) => void (now += ms) };
 }
@@ -53,6 +56,14 @@ export class Browser {
     const res = await this.req(method, path, body);
     const text = await res.text();
     return { status: res.status, body: (text ? JSON.parse(text) : null) as T };
+  }
+
+  async upload(path: string, filename: string, bytes: Uint8Array): Promise<{ status: number; body: any }> {
+    const h: Record<string, string> = { "user-agent": this.userAgent, "x-csrf-token": this.csrf, "x-filename": encodeURIComponent(filename) };
+    if (this.cookies.size) h.cookie = [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; ");
+    const res = await this.app.request(`${PUBLIC_URL}${path}`, { method: "POST", headers: h, body: bytes as unknown as BodyInit });
+    const text = await res.text();
+    return { status: res.status, body: text ? JSON.parse(text) : null };
   }
 
   async login(username: string, password = PASSWORD): Promise<number> {

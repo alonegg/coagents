@@ -20,6 +20,7 @@ import type { Actor, AppContext } from "../context.js";
 import { listDecisions, publishDecision, publishGeneralBlocker } from "../decisions.js";
 import { ackCursor, listEvents, markStreamDelivered, MAX_EVENT_PAGE, readCursor } from "../events.js";
 import { resumeCursor, sse } from "../stream.js";
+import { describeVersions } from "../artifacts.js";
 import { sessionStillValid } from "../auth.js";
 import { invalid, notAllowed, notFound } from "../http-error.js";
 import { clientStillValid, requireAgentPermission, type AgentState } from "../agents.js";
@@ -63,7 +64,7 @@ export function actorFor(ctx: AppContext, c: Context<Env>): { actor: Actor; acce
   };
 }
 
-function checkPermission(ctx: { access: ProjectAccess; agent: AgentState | null }, permission: Permission): void {
+export function checkPermission(ctx: { access: ProjectAccess; agent: AgentState | null }, permission: Permission): void {
   if (ctx.agent) requireAgentPermission(ctx.agent, ctx.access.role, permission);
   else requirePermission(ctx.access, permission);
 }
@@ -110,9 +111,14 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
   });
 
   r.get("/:id/tasks/:taskId", (c) => {
-    const { access } = actorFor(ctx, c);
+    const { actor, access } = actorFor(ctx, c);
     const task = getTask(ctx, access.projectId, c.req.param("taskId"));
-    return c.json({ ...task, submissions: listSubmissions(ctx, task.id) });
+    const viewer = { userId: actor.userId, role: access.role };
+    const submissions = listSubmissions(ctx, task.id).map((s) => {
+      const sub = s as { artifact_version_ids: string[] };
+      return { ...sub, artifacts: describeVersions(ctx, access.projectId, viewer, sub.artifact_version_ids) };
+    });
+    return c.json({ ...task, submissions });
   });
 
   r.patch("/:id/tasks/:taskId", async (c) => {
@@ -201,11 +207,11 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
   });
 
   r.get("/:id/events", (c) => {
-    const { access } = actorFor(ctx, c);
+    const { actor, access } = actorFor(ctx, c);
     const cursor = Number(c.req.query("cursor") ?? 0);
     const limit = Math.min(Number(c.req.query("limit") ?? 50), MAX_EVENT_PAGE);
     if (!Number.isInteger(cursor) || cursor < 0 || !Number.isInteger(limit) || limit < 1) throw invalid("Bad cursor or limit");
-    return c.json(listEvents(ctx, access.projectId, cursor, limit));
+    return c.json(listEvents(ctx, access.projectId, cursor, limit, { userId: actor.userId, role: access.role }));
   });
 
   // Live events for this project. Re-authorizes the session or agent and project membership before
@@ -230,7 +236,11 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
           return false;
         }
       },
-      fetch: (cursor) => ({ items: listEvents(ctx, access.projectId, cursor, MAX_EVENT_PAGE).events, cursorOf: (e: EventView) => e.seq }),
+      // Role is re-read on every fetch so a downgrade or restriction change applies to the open stream.
+      fetch: (cursor) => {
+        const role = projectAccess(ctx, actor.userId, access.projectId).role;
+        return { items: listEvents(ctx, access.projectId, cursor, MAX_EVENT_PAGE, { userId: actor.userId, role }).events, cursorOf: (e: EventView) => e.seq };
+      },
       onDelivered: (seq) => markStreamDelivered(ctx, consumer, access.projectId, seq),
     });
   });

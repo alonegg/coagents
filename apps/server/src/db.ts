@@ -233,6 +233,68 @@ const MIGRATIONS: readonly string[] = [
   ) STRICT;
   CREATE INDEX notifications_by_recipient ON notifications(recipient_id, created_at);
   `,
+  `
+  CREATE TABLE stored_files (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    storage_key TEXT NOT NULL UNIQUE,
+    filename TEXT NOT NULL,
+    media_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    sha256 TEXT NOT NULL,
+    uploaded_by TEXT NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL
+  ) STRICT;
+
+  CREATE TABLE artifacts (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    task_id TEXT REFERENCES tasks(id),
+    title TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('markdown', 'file', 'link')),
+    status TEXT NOT NULL CHECK (status IN ('draft', 'published', 'deleted')),
+    visibility TEXT NOT NULL CHECK (visibility IN ('project', 'restricted')),
+    current_version INTEGER,
+    author_id TEXT NOT NULL REFERENCES users(id),
+    source_author TEXT,
+    source_at TEXT,
+    imported_by TEXT REFERENCES users(id),
+    imported_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT,
+    deleted_by TEXT REFERENCES users(id)
+  ) STRICT;
+  CREATE INDEX artifacts_by_project ON artifacts(project_id, updated_at);
+
+  CREATE TABLE artifact_versions (
+    id TEXT PRIMARY KEY,
+    artifact_id TEXT NOT NULL REFERENCES artifacts(id),
+    state TEXT NOT NULL CHECK (state IN ('draft', 'published')),
+    version INTEGER,
+    revision INTEGER NOT NULL,
+    body TEXT,
+    file_id TEXT REFERENCES stored_files(id),
+    url TEXT,
+    created_by TEXT NOT NULL REFERENCES users(id),
+    created_at TEXT NOT NULL,
+    published_at TEXT,
+    CHECK ((state = 'published') = (version IS NOT NULL)),
+    CHECK ((body IS NOT NULL) + (file_id IS NOT NULL) + (url IS NOT NULL) = 1)
+  ) STRICT;
+  CREATE UNIQUE INDEX one_draft_per_artifact ON artifact_versions(artifact_id) WHERE state = 'draft';
+  CREATE UNIQUE INDEX artifact_version_numbers ON artifact_versions(artifact_id, version) WHERE version IS NOT NULL;
+  -- Published versions are immutable.
+  CREATE TRIGGER published_versions_immutable BEFORE UPDATE ON artifact_versions
+    WHEN OLD.state = 'published' BEGIN SELECT RAISE(ABORT, 'published artifact versions are immutable'); END;
+
+  CREATE TABLE artifact_grants (
+    artifact_id TEXT NOT NULL REFERENCES artifacts(id),
+    user_id TEXT NOT NULL REFERENCES users(id),
+    PRIMARY KEY (artifact_id, user_id)
+  ) STRICT;
+  `,
 ];
 
 export function openDb(path: string): Db {

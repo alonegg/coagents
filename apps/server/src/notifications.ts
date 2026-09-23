@@ -65,7 +65,7 @@ export function listNotifications(ctx: AppContext, userId: string, opts: { unrea
        JOIN memberships m ON m.project_id = n.project_id AND m.user_id = n.recipient_id
        JOIN projects p ON p.id = n.project_id
        JOIN events e ON e.seq = n.event_seq
-       WHERE n.recipient_id = ? ${opts.unreadOnly ? "AND n.read_at IS NULL" : ""} ${opts.after ? "AND n.id > ?" : ""}
+       WHERE e.subject_type != 'artifact' AND n.recipient_id = ? ${opts.unreadOnly ? "AND n.read_at IS NULL" : ""} ${opts.after ? "AND n.id > ?" : ""}
        ORDER BY n.event_seq DESC LIMIT ?`,
     )
     .all(...[userId, ...(opts.after ? [opts.after] : []), opts.limit]) as NotificationView[];

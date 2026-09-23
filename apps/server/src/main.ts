@@ -27,6 +27,7 @@ function context(): AppContext {
       publicUrl: (process.env.COAGENTS_PUBLIC_URL ?? "http://127.0.0.1:8787").replace(/\/$/, ""),
       sessionTtlHours: 24 * 30,
       leaseMinutes: Number(process.env.COAGENTS_LEASE_MINUTES ?? 30),
+      filesDir: join(dataDir, "files"),
     },
   };
 }

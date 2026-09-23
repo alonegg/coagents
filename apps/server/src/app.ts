@@ -1,6 +1,5 @@
 import type { ErrorBody } from "@coagents/contract";
 import { Hono } from "hono";
-import { secureHeaders } from "hono/secure-headers";
 import { csrfMiddleware, LoginLimiter, sessionMiddleware, type Env } from "./auth.js";
 import type { AppContext } from "./context.js";
 import { schemaVersion } from "./db.js";
@@ -11,10 +10,22 @@ import { projectRoutes } from "./routes/projects.js";
 import { sessionRoutes } from "./routes/session.js";
 import { workRoutes } from "./routes/work.js";
 import { agentRoutes } from "./routes/agents.js";
+import { artifactRoutes } from "./routes/artifacts.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { agentMiddleware } from "./agents.js";
 
 export const SERVER_VERSION = "0.1.0";
+
+const SECURITY_HEADERS: Record<string, string> = {
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'; object-src 'none'",
+  "Strict-Transport-Security": "max-age=15552000; includeSubDomains",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "SAMEORIGIN",
+  "Referrer-Policy": "no-referrer",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Resource-Policy": "same-origin",
+};
 
 export function createApi(ctx: AppContext): Hono<Env> {
   const api = new Hono<Env>();
@@ -40,6 +51,7 @@ export function createApi(ctx: AppContext): Hono<Env> {
   api.route("/session", sessionRoutes(ctx, new LoginLimiter()));
   api.route("/projects", projectRoutes(ctx));
   api.route("/projects", workRoutes(ctx));
+  api.route("/projects", artifactRoutes(ctx));
   api.route("/invitations", invitationRoutes(ctx));
   api.route("/devices", deviceRoutes(ctx));
   api.route("/notifications", notificationRoutes(ctx));
@@ -49,22 +61,13 @@ export function createApi(ctx: AppContext): Hono<Env> {
 
 export function createApp(ctx: AppContext, hub?: Hono): Hono {
   const app = new Hono();
-  app.use(
-    "*",
-    secureHeaders({
-      contentSecurityPolicy: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:"],
-        connectSrc: ["'self'"],
-        frameAncestors: ["'none'"],
-        baseUri: ["'none'"],
-        formAction: ["'self'"],
-      },
-      referrerPolicy: "no-referrer",
-    }),
-  );
+  // Security headers for every response; a route may set a stricter value (file downloads do).
+  app.use("*", async (c, next) => {
+    await next();
+    for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+      if (!c.res.headers.has(name)) c.res.headers.set(name, value);
+    }
+  });
   app.route("/v1", createApi(ctx));
   if (hub) app.route("/", hub);
   return app;

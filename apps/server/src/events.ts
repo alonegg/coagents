@@ -3,6 +3,7 @@ import { nowIso, type Actor, type AppContext } from "./context.js";
 import { wakeProject } from "./bus.js";
 import { newId } from "./ids.js";
 import { notifyForEvent } from "./notifications.js";
+import { artifactReadable, type Viewer } from "./visibility.js";
 
 export interface NewEvent {
   kind: string;
@@ -49,13 +50,18 @@ export const MAX_EVENT_PAGE = 200;
 
 // Events with seq > cursor, ascending. Subject-level visibility filtering joins here once restricted
 // artifacts exist (M5); every event type so far is visible to all project members.
-export function listEvents(ctx: AppContext, projectId: string, cursor: number, limit: number): EventPage {
+// Events about artifacts the viewer cannot read are filtered in the query, so they never appear in
+// pages, counts or streams; the cursor simply moves past them.
+export function listEvents(ctx: AppContext, projectId: string, cursor: number, limit: number, viewer: Viewer): EventPage {
+  const readable = artifactReadable("a", viewer, { includeDeleted: true });
   const rows = ctx.db
     .prepare(
       `SELECT e.*, u.display_name FROM events e JOIN users u ON u.id = e.actor_user_id
-       WHERE e.project_id = ? AND e.seq > ? ORDER BY e.seq LIMIT ?`,
+       LEFT JOIN artifacts a ON e.subject_type = 'artifact' AND a.id = e.subject_id
+       WHERE e.project_id = ? AND e.seq > ? AND (e.subject_type != 'artifact' OR (${readable.sql}))
+       ORDER BY e.seq LIMIT ?`,
     )
-    .all(projectId, cursor, limit + 1) as EventRow[];
+    .all(projectId, cursor, ...readable.params, limit + 1) as EventRow[];
   const page = rows.slice(0, limit);
   return {
     events: page.map(toView),

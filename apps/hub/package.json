@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@coagents/contract": "workspace:*",
+    "dompurify": "^3.4.15",
+    "marked": "^18.0.14",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

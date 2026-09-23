@@ -7,6 +7,8 @@ export interface ServerConfig {
   publicUrl: string;
   sessionTtlHours: number;
   leaseMinutes: number;
+  // Managed storage for uploaded artifact files; never exposed as paths to clients.
+  filesDir: string;
 }
 
 export interface AppContext {

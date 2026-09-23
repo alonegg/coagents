@@ -1,5 +1,6 @@
 import { canClaim, nextStatus, type ClaimResult, type TaskAction, type TaskStatus, type TaskView } from "@coagents/contract";
 import { nowIso, type Actor, type AppContext } from "./context.js";
+import { checkSubmissionVersions } from "./artifacts.js";
 import { appendEvent } from "./events.js";
 import { HttpError, invalid, notFound } from "./http-error.js";
 import { hashSecret, newId, newSecret } from "./ids.js";
@@ -260,11 +261,8 @@ export function submitTask(
 ): { submission_id: string; task: TaskView } {
   const row = loadRow(ctx, projectId, taskId);
   requireHolder(ctx, row, actor, input.lease_token);
-  if (input.artifact_version_ids.length > 0) {
-    // Artifact versions arrive in M5; until then a submission must carry written evidence.
-    throw invalid("Artifact versions are not available yet; attach written evidence instead");
-  }
-  if (!input.evidence) throw invalid("A submission needs evidence or artifact versions");
+  checkSubmissionVersions(ctx, projectId, input.artifact_version_ids);
+  if (!input.evidence && input.artifact_version_ids.length === 0) throw invalid("A submission needs evidence or artifact versions");
   transition(ctx, row, requireTransition("submit", row), true);
   const id = newId("sub");
   ctx.db
@@ -278,7 +276,7 @@ export function submitTask(
     subjectType: "task",
     subjectId: taskId,
     summary: `提交任务「${row.title}」待验收`,
-    data: { submission_id: id },
+    data: { submission_id: id, artifact_version_ids: input.artifact_version_ids },
   });
   return { submission_id: id, task: getTask(ctx, projectId, taskId) };
 }

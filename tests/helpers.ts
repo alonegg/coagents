@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { serve } from "@hono/node-server";
 import { createApp } from "../apps/server/src/app.js";
 import type { AppContext } from "../apps/server/src/context.js";
@@ -7,7 +10,7 @@ import { createUser } from "../apps/server/src/users.js";
 export const PASSWORD = "correct horse battery";
 
 export async function liveServer(): Promise<{ base: string; ctx: AppContext; close: () => void }> {
-  const ctx: AppContext = { db: openDb(":memory:"), clock: () => new Date(), config: { publicUrl: "http://127.0.0.1", sessionTtlHours: 1, leaseMinutes: 30 } };
+  const ctx: AppContext = { db: openDb(":memory:"), clock: () => new Date(), config: { publicUrl: "http://127.0.0.1", sessionTtlHours: 1, leaseMinutes: 30, filesDir: mkdtempSync(join(tmpdir(), "coagents-files-")) } };
   return new Promise((resolve) => {
     const s = serve({ fetch: createApp(ctx).fetch, hostname: "127.0.0.1", port: 0 }, (info) => {
       ctx.config.publicUrl = `http://127.0.0.1:${info.port}`;

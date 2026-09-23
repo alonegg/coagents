@@ -4,13 +4,15 @@ import { api, ApiError, formatTime, ROLE_LABEL } from "../api.js";
 import type { ProjectTab } from "../router.js";
 import { ActivityTab } from "./Activity.js";
 import { AgentsTab } from "./Agents.js";
+import { ArtifactDetail } from "./ArtifactDetail.js";
+import { ArtifactsTab } from "./Artifacts.js";
 import { BoardTab } from "./Board.js";
 import { DecisionsTab } from "./Decisions.js";
 import { MembersTab } from "./Members.js";
 
-const TAB_LABEL: Record<ProjectTab, string> = { board: "看板", activity: "活动", decisions: "决策", agents: "Agent 连接", members: "成员与邀请" };
+const TAB_LABEL: Record<ProjectTab, string> = { board: "看板", artifacts: "成果", activity: "活动", decisions: "决策", agents: "Agent 连接", members: "成员与邀请" };
 
-export function ProjectPage({ route, session }: { route: { id: string; tab: ProjectTab; taskId?: string }; session: SessionView }) {
+export function ProjectPage({ route, session }: { route: { id: string; tab: ProjectTab; taskId?: string; artifactId?: string }; session: SessionView }) {
   const [project, setProject] = useState<ProjectView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,6 +38,7 @@ export function ProjectPage({ route, session }: { route: { id: string; tab: Proj
         ))}
       </nav>
       {route.tab === "board" && <BoardTab project={project} session={session} taskId={route.taskId} />}
+      {route.tab === "artifacts" && (route.artifactId ? <ArtifactDetail project={project} session={session} artifactId={route.artifactId} /> : <ArtifactsTab project={project} session={session} />)}
       {route.tab === "activity" && <ActivityTab project={project} session={session} />}
       {route.tab === "decisions" && <DecisionsTab project={project} session={session} />}
       {route.tab === "agents" && <AgentsTab project={project} session={session} />}

@@ -7,6 +7,7 @@ interface Submission {
   id: string;
   summary: string;
   evidence: string | null;
+  artifacts: { version_id: string; artifact_id: string | null; title: string | null; version: number | null; readable: boolean }[];
   created_at: string;
   outcome: "accepted" | "rejected" | null;
   review_note: string | null;
@@ -31,12 +32,25 @@ export function TaskDetail({
   const [error, setError] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [evidence, setEvidence] = useState("");
+  const [picked, setPicked] = useState<string[]>([]);
+  const [published, setPublished] = useState<{ versionId: string; label: string }[]>([]);
 
   const base = `/projects/${project.id}/tasks/${taskId}`;
   const load = useCallback(() => {
     api<Detail>("GET", base).then(setTask, (e: ApiError) => setError(e.status === 404 ? "任务不存在或无权访问。" : e.message));
   }, [base]);
   useEffect(load, [load]);
+  useEffect(() => {
+    api<{ artifacts: { id: string; title: string; status: string; current_version: number | null }[] }>("GET", `/projects/${project.id}/artifacts`).then(async (r) => {
+      const out: { versionId: string; label: string }[] = [];
+      for (const a of r.artifacts.filter((x) => x.status === "published")) {
+        const d = await api<{ versions: { id: string; version: number | null }[] }>("GET", `/projects/${project.id}/artifacts/${a.id}`);
+        const cur = d.versions.find((v) => v.version === a.current_version);
+        if (cur) out.push({ versionId: cur.id, label: `${a.title} v${a.current_version}` });
+      }
+      setPublished(out);
+    }, () => undefined);
+  }, [project.id]);
 
   async function act(path: string, body: Record<string, unknown>) {
     setError(null);
@@ -44,6 +58,7 @@ export function TaskDetail({
       await api("POST", path, { ...body, request_id: requestId() });
       setText("");
       setEvidence("");
+      setPicked([]);
       load();
       await onChanged();
     } catch (e) {
@@ -87,11 +102,18 @@ export function TaskDetail({
             <>
               <label>说明 / 阻塞原因 / 完成摘要<textarea value={text} onChange={(e) => setText(e.target.value)} /></label>
               <label>证据（验证结果、commit 等）<textarea value={evidence} onChange={(e) => setEvidence(e.target.value)} /></label>
+              {published.length > 0 && (
+                <label>关联已发布成果（提交时绑定当前版本）
+                  <select multiple value={picked} onChange={(e) => setPicked([...e.target.selectedOptions].map((o) => o.value))}>
+                    {published.map((p) => <option key={p.versionId} value={p.versionId}>{p.label}</option>)}
+                  </select>
+                </label>
+              )}
               <div className="row">
                 <button onClick={() => act(`${base}/renew`, {})}>续租</button>
                 <button onClick={() => act(`${base}/release`, text ? { note: text } : {})}>释放</button>
                 <button disabled={!text} onClick={() => act(`/projects/${project.id}/blockers`, { task_id: task.id, body: text })}>报告阻塞</button>
-                <button disabled={!text || !evidence} onClick={() => act(`${base}/submit`, { summary: text, evidence })}>提交待验收</button>
+                <button disabled={!text || (!evidence && picked.length === 0)} onClick={() => act(`${base}/submit`, { summary: text, ...(evidence ? { evidence } : {}), artifact_version_ids: picked })}>提交待验收</button>
               </div>
             </>
           )}
@@ -125,6 +147,11 @@ export function TaskDetail({
                 <strong>{formatTime(s.created_at, tz)}</strong> · {s.outcome === "accepted" ? "已接受" : s.outcome === "rejected" ? "已退回" : "待验收"}
                 <p className="pre">{s.summary}</p>
                 {s.evidence && <p className="pre muted">证据：{s.evidence}</p>}
+                {s.artifacts.length > 0 && (
+                  <p>成果：{s.artifacts.map((a) => a.readable
+                    ? <a key={a.version_id} href={`#/projects/${project.id}/artifacts/${a.artifact_id}`}>{a.title} v{a.version} </a>
+                    : <span key={a.version_id} className="muted">（你无权查看的成果） </span>)}</p>
+                )}
                 {s.review_note && <p className="pre">验收说明：{s.review_note}</p>}
               </li>
             ))}
