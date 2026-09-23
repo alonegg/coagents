@@ -64,7 +64,8 @@ async function run() {
   assert.deepEqual(tree(project), before.project);
   assert.equal(existsSync(join(home, ".coagents")), false);
   assert.equal(existsSync(join(home, ".codex")), before.codex);
-  const procs = execFileSync("sh", ["-c", `pgrep -fl "${CLI}" || true`], { encoding: "utf8" }).trim();
+  // The bracket keeps this check from matching its own command line.
+  const procs = execFileSync("sh", ["-c", `pgrep -fl "connector/dist/main[.]js" || true`], { encoding: "utf8" }).trim();
   assert.equal(procs, "");
   const revoked = await fetch(`${HUB}/v1/agent/me`, { headers: { authorization: `Bearer ${agentToken}` } });
   assert.equal(revoked.status, 401);
