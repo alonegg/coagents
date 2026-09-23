@@ -13,5 +13,5 @@
 | 真实工具调用 | 2026-09-23：`claude -p` 会话中服务状态 connected，依次调用 get_context、list_tasks、claim_task、submit_task，任务进入待验收；Hub 显示连接"已验证"，事件标注 Agent 来源 |
 | 证书校验 | Connector 使用 Node 默认校验；自签证书服务被拒绝（`tests/connector.integration.test.ts`） |
 | 撤销与卸载 | `coagents uninstall claude-code`：`.mcp.json` 恢复后 SHA-256 与安装前一致（bc1652e7…）；服务端凭证撤销，旧令牌 401；本机凭证删除 |
-| 实时收取与重连 | 待验证（M4） |
+| 实时收取与重连 | Connector 在 MCP 运行期间保持 SSE 流，断线按游标退避重连；服务重启后自动恢复（2026-09-23 实测）；Hub 显示送达/已读序号 |
 | Git 交接 | 待验证（M6） |
