@@ -56,6 +56,8 @@ systemctl stop coagents && mv /var/lib/coagents /var/lib/coagents.before-restore
 
 ## 发布 Connector（npm 包 `coagents`）
 
+已发布：`coagents@0.1.0`（2026-09-24，npmjs.org，账号 alonegg）。发布 token 保存在开发机 `~/.npmrc`，须为 granular token、All packages 读写并允许绕过双重验证；仅限指定包的 token 无法创建新包。
+
 版本号只改 `packages/connector/package.json` 与 `packages/connector/src/server.ts` 中的 `CONNECTOR_VERSION`（有测试保证二者一致）。发布目录是打包生成的 `packages/connector/.pkg`，仓库里的工作区包标为 private，不能直接发布。
 
 ```bash
