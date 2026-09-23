@@ -19,13 +19,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
-        if: inputs.milestone == 'm6'
+        if: inputs.milestone == 'm6' || inputs.milestone == 'm9-clean'
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           package-manager-cache: false
       # The Connector is built only for runs that act as an agent on this machine.
-      - if: inputs.milestone == 'm6'
+      - if: inputs.milestone == 'm6' || inputs.milestone == 'm9-clean'
         run: pnpm install --frozen-lockfile && pnpm -F @coagents/contract -F @coagents/connector exec tsc -b
       - run: node scripts/e2e/${{ inputs.milestone }}.mjs ${{ inputs.phase }}
         env:

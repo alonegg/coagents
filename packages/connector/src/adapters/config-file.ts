@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, rmdirSync, unlinkSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { readJson, writeFileAtomic } from "../store.js";
 
 // A client whose MCP configuration lives in one file we can edit as a whole.
@@ -20,6 +20,8 @@ export interface McpEntry {
 
 interface InstallRecord {
   client: string;
+  // True when the install created the config file's directory; uninstall removes it again if empty.
+  created_dir?: boolean;
   before_b64: string | null;
   after_sha256: string;
   installed_at: string;
@@ -45,12 +47,14 @@ export function planInstall(format: ConfigFormat, path: string, entry: McpEntry)
 // Writes only when there is a change; keeps the original bytes so an untouched file can be restored exactly.
 export function applyInstall(format: ConfigFormat, plan: Plan, home: string): boolean {
   if (plan.after === null) return false;
+  const createdDir = !existsSync(dirname(plan.path));
   if (plan.before !== null) writeFileAtomic(`${plan.path}.coagents-backup`, plan.before, 0o600);
   writeFileAtomic(plan.path, plan.after, 0o644);
   const records = readJson<Record<string, InstallRecord>>(recordsPath(home), {});
   const prior = records[plan.path];
   records[plan.path] = {
     client: format.client,
+    created_dir: prior?.created_dir ?? createdDir,
     // Re-installing over our own earlier install keeps the original pre-install bytes.
     before_b64: prior ? prior.before_b64 : plan.before === null ? null : Buffer.from(plan.before).toString("base64"),
     after_sha256: sha(plan.after),
@@ -85,6 +89,13 @@ export function removeInstall(format: ConfigFormat, path: string, entry: McpEntr
     writeFileAtomic(recordsPath(home), `${JSON.stringify(records, null, 2)}\n`);
   }
   if (existsSync(`${path}.coagents-backup`)) unlinkSync(`${path}.coagents-backup`);
+  if (rec?.created_dir) {
+    try {
+      rmdirSync(dirname(path));
+    } catch {
+      // not empty: something else lives there now
+    }
+  }
   return outcome;
 }
 

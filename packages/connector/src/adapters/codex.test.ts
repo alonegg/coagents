@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -19,6 +19,14 @@ trust_level = "trusted"
 `;
 
 describe("codex config", () => {
+  it("removes the config directory again when the install created it", () => {
+    const root = mkdtempSync(join(tmpdir(), "coagents-codex-"));
+    const path = join(root, "fresh", ".codex", "config.toml");
+    applyInstall(codexFormat, planInstall(codexFormat, path, entry), join(root, "home"));
+    expect(removeInstall(codexFormat, path, entry, join(root, "home"))).toBe("restored");
+    expect(existsSync(join(root, "fresh", ".codex"))).toBe(false);
+  });
+
   it("appends a marked table and restores the original bytes on uninstall", () => {
     const root = mkdtempSync(join(tmpdir(), "coagents-codex-"));
     const path = join(root, "config.toml");

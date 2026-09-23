@@ -14,7 +14,8 @@ import { login } from "./login.js";
 import { ServiceClient } from "./service.js";
 import { EventStream } from "./sse.js";
 import { createConnectorServer, type ConnectorState } from "./server.js";
-import { coagentsHome, deleteCredential, loadCredential } from "./store.js";
+import { coagentsHome, deleteCredential, forgetClientLeases, loadCredential, pruneHome } from "./store.js";
+import { rmdirSync, rmSync } from "node:fs";
 
 const USAGE = `coagents — CoAgents Connector
 
@@ -151,8 +152,21 @@ async function main(): Promise<void> {
       if (s.ok && !values["keep-credential"]) {
         await new ServiceClient(s.credential.server, s.credential.agent_token).call("DELETE", "/agent/me").catch((e: Error) => say(`Could not revoke on the server: ${e.message}`));
         deleteCredential(s.home, s.credential.server, s.credential.project_id);
+        forgetClientLeases(s.home, s.credential.client_id);
         say(`Revoked and deleted the agent credential ${s.credential.client_id}.`);
+        // The directory binding names this project only; remove it (and an empty .coagents/).
+        const b = findProjectBinding(dir);
+        if (b.ok && b.binding.project_id === s.credential.project_id) {
+          rmSync(b.path, { force: true });
+          try {
+            rmdirSync(dirname(b.path));
+          } catch {
+            // other files live there
+          }
+          say(`Removed ${b.path}.`);
+        }
       }
+      pruneHome(coagentsHome());
       return;
     }
     case "tool": {

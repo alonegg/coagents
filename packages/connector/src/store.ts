@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -74,7 +74,28 @@ export function recallLease(home: string, clientId: string, taskId: string): str
   return readJson<Record<string, string>>(leasesPath(home), {})[`${clientId}|${taskId}`];
 }
 
+export function forgetClientLeases(home: string, clientId: string): void {
+  const all = readJson<Record<string, string>>(leasesPath(home), {});
+  const kept = Object.fromEntries(Object.entries(all).filter(([k]) => !k.startsWith(`${clientId}|`)));
+  if (Object.keys(kept).length !== Object.keys(all).length) writeFileAtomic(leasesPath(home), `${JSON.stringify(kept, null, 2)}\n`);
+}
+
 export function forgetLease(home: string, clientId: string, taskId: string): void {
   const all = readJson<Record<string, string>>(leasesPath(home), {});
   if (delete all[`${clientId}|${taskId}`]) writeFileAtomic(leasesPath(home), `${JSON.stringify(all, null, 2)}\n`);
+}
+
+// After an uninstall: remove local state files that no longer hold anything, and the home directory
+// itself when it is empty, so a clean machine is left clean.
+export function pruneHome(home: string): void {
+  for (const name of ["credentials.json", "leases.json", "installs.json"]) {
+    const path = join(home, name);
+    const data = readJson<Record<string, unknown> | null>(path, null);
+    if (data !== null && Object.keys(data).length === 0) rmSync(path, { force: true });
+  }
+  try {
+    if (readdirSync(home).length === 0) rmdirSync(home);
+  } catch {
+    // missing or not empty: leave it
+  }
 }
