@@ -17,7 +17,7 @@ export interface AuthState {
   csrfToken: string;
 }
 
-export type Env = { Variables: { auth: AuthState | null } };
+export type Env = { Variables: { auth: AuthState | null; agent: import("./agents.js").AgentState | null } };
 
 interface SessionRow {
   session_id: string;
@@ -38,7 +38,8 @@ export function sessionMiddleware(ctx: AppContext): MiddlewareHandler<Env> {
   return async (c, next) => {
     c.set("auth", null);
     const token = getCookie(c, SESSION_COOKIE);
-    if (token) {
+    // A bearer (agent) request never also acts as a browser session.
+    if (token && !c.req.header("authorization")) {
       const now = nowIso(ctx);
       const row = ctx.db
         .prepare(

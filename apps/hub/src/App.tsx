@@ -2,6 +2,7 @@ import type { SessionView } from "@coagents/contract";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, loadSession, setCsrf } from "./api.js";
 import { go, useRoute } from "./router.js";
+import { DeviceCodePage } from "./pages/DeviceCode.js";
 import { DevicesPage } from "./pages/Devices.js";
 import { InvitePage } from "./pages/Invite.js";
 import { LoginPage } from "./pages/Login.js";
@@ -50,6 +51,7 @@ export function App() {
         {route.name === "projects" && <ProjectsPage session={session} />}
         {route.name === "project" && <ProjectPage route={route} session={session} />}
         {route.name === "devices" && <DevicesPage session={session} />}
+        {route.name === "device-code" && <DeviceCodePage code={route.code} session={session} />}
       </main>
     </div>
   );

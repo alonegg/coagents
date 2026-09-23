@@ -342,3 +342,18 @@ export function listSubmissions(ctx: AppContext, taskId: string): unknown[] {
       return { ...row, artifact_version_ids: JSON.parse(row.artifact_version_ids) as string[] };
     });
 }
+
+// Ends active leases held by a revoked identity. The card stays where it is (PRD section 7);
+// the lapsed lease just cannot write again and others may claim the task.
+export function expireLeases(ctx: AppContext, where: { projectId?: string; userId?: string; deviceId?: string; clientId?: string }): number {
+  const now = nowIso(ctx);
+  const clauses = ["lease_until > ?"];
+  const args: string[] = [now];
+  if (where.projectId) (clauses.push("project_id = ?"), args.push(where.projectId));
+  if (where.userId) (clauses.push("holder_user_id = ?"), args.push(where.userId));
+  if (where.deviceId) (clauses.push("holder_device_id = ?"), args.push(where.deviceId));
+  if (where.clientId) (clauses.push("holder_kind = 'client' AND holder_id = ?"), args.push(where.clientId));
+  return ctx.db
+    .prepare(`UPDATE tasks SET lease_until = ?, version = version + 1, updated_at = ? WHERE ${clauses.join(" AND ")}`)
+    .run(now, now, ...args).changes;
+}

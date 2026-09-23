@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "composite": false, "declaration": false, "rootDir": ".." },
+  "include": ["*.ts", "../apps/server/src/**/*.ts", "../packages/connector/src/**/*.ts", "../packages/contract/src/**/*.ts"]
+}

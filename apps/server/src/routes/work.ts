@@ -10,6 +10,7 @@ import {
   ReasonedReviewInput,
   ReviewInput,
   TaskStatus,
+  type Permission,
 } from "@coagents/contract";
 import { Hono, type Context } from "hono";
 import { projectAccess, requireActive, requirePermission, type ProjectAccess } from "../access.js";
@@ -17,7 +18,8 @@ import { requireAuth, type Env } from "../auth.js";
 import type { Actor, AppContext } from "../context.js";
 import { listDecisions, publishDecision, publishGeneralBlocker } from "../decisions.js";
 import { ackCursor, listEvents, MAX_EVENT_PAGE, readCursor } from "../events.js";
-import { invalid } from "../http-error.js";
+import { invalid, notAllowed, notFound } from "../http-error.js";
+import { requireAgentPermission, type AgentState } from "../agents.js";
 import { idempotent, type StoredResult } from "../idempotency.js";
 import {
   blockTask,
@@ -34,14 +36,37 @@ import {
 } from "../tasks.js";
 import { parseBody } from "../validate.js";
 
-// Resolves the caller as an actor with project access. Agent clients plug in here in M3.
-export function actorFor(ctx: AppContext, c: Context<Env>): { actor: Actor; access: ProjectAccess } {
+// Resolves the caller as a person (session) or an agent (bearer token) with project access.
+// An agent token only ever reaches its own project; any other project id looks nonexistent.
+export function actorFor(ctx: AppContext, c: Context<Env>): { actor: Actor; access: ProjectAccess; agent: AgentState | null } {
+  const agent = c.get("agent");
+  const projectId = c.req.param("id")!;
+  if (agent) {
+    if (agent.projectId !== projectId) throw notFound();
+    const access = projectAccess(ctx, agent.userId, projectId);
+    requireAgentPermission(agent, access.role, "project.read");
+    return {
+      actor: { kind: "client", userId: agent.userId, displayName: agent.displayName, deviceId: agent.deviceId, clientId: agent.clientId },
+      access,
+      agent,
+    };
+  }
   const auth = requireAuth(c);
-  const access = projectAccess(ctx, auth.user.id, c.req.param("id")!);
+  const access = projectAccess(ctx, auth.user.id, projectId);
   return {
     actor: { kind: "user", userId: auth.user.id, displayName: auth.user.display_name, deviceId: auth.deviceId, clientId: null },
     access,
+    agent: null,
   };
+}
+
+function checkPermission(ctx: { access: ProjectAccess; agent: AgentState | null }, permission: Permission): void {
+  if (ctx.agent) requireAgentPermission(ctx.agent, ctx.access.role, permission);
+  else requirePermission(ctx.access, permission);
+}
+
+function consumerOf(actor: Actor): { kind: "device" | "client"; id: string } {
+  return actor.kind === "client" ? { kind: "client", id: actor.clientId! } : { kind: "device", id: actor.deviceId };
 }
 
 function reply(c: Context<Env>, r: StoredResult) {
@@ -58,8 +83,9 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
     scope: string,
     fn: (actor: Actor, access: ProjectAccess) => StoredResult,
   ) {
-    const { actor, access } = actorFor(ctx, c);
-    requirePermission(access, "task.write");
+    const resolved = actorFor(ctx, c);
+    const { actor, access } = resolved;
+    checkPermission(resolved, "task.write");
     requireActive(access);
     return reply(c, idempotent(ctx, actor, input.request_id, `${scope}:${access.projectId}`, () => fn(actor, access)));
   }
@@ -131,7 +157,9 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
   for (const action of ["accept", "reject", "reopen", "terminate"] as const) {
     r.post(`/:id/tasks/:taskId/${action}`, async (c) => {
       const input = action === "accept" ? await parseBody(c, ReviewInput) : await parseBody(c, ReasonedReviewInput);
-      const { actor, access } = actorFor(ctx, c);
+      const resolved = actorFor(ctx, c);
+      const { actor, access } = resolved;
+      if (resolved.agent) throw notAllowed("Agents cannot review tasks; a person must do this in the Hub");
       requirePermission(access, "task.review");
       requireActive(access);
       const note = "reason" in input ? input.reason : input.note;
@@ -180,14 +208,14 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
   // Consumers confirm what they processed; the stored cursor never moves backwards.
   r.get("/:id/cursor", (c) => {
     const { actor, access } = actorFor(ctx, c);
-    return c.json({ last_seen_seq: readCursor(ctx, { kind: "device", id: actor.deviceId }, access.projectId) });
+    return c.json({ last_seen_seq: readCursor(ctx, consumerOf(actor), access.projectId) });
   });
 
   r.post("/:id/cursor", async (c) => {
     const { actor, access } = actorFor(ctx, c);
     const body = (await c.req.json().catch(() => null)) as { seq?: unknown } | null;
     if (!body || typeof body.seq !== "number" || !Number.isInteger(body.seq) || body.seq < 0) throw invalid("seq must be a non-negative integer");
-    return c.json({ last_seen_seq: ackCursor(ctx, { kind: "device", id: actor.deviceId }, access.projectId, body.seq) });
+    return c.json({ last_seen_seq: ackCursor(ctx, consumerOf(actor), access.projectId, body.seq) });
   });
 
   return r;

@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 
-export type ProjectTab = "board" | "activity" | "decisions" | "members";
-const TABS: readonly ProjectTab[] = ["board", "activity", "decisions", "members"];
+export type ProjectTab = "board" | "activity" | "decisions" | "agents" | "members";
+const TABS: readonly ProjectTab[] = ["board", "activity", "decisions", "agents", "members"];
 
 export type Route =
   | { name: "projects" }
   | { name: "project"; id: string; tab: ProjectTab; taskId?: string }
   | { name: "invite"; token: string }
-  | { name: "devices" };
+  | { name: "devices" }
+  | { name: "device-code"; code: string };
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
@@ -19,6 +20,7 @@ export function parseHash(hash: string): Route {
   }
   if (parts[0] === "invite" && parts[1]) return { name: "invite", token: parts[1] };
   if (parts[0] === "devices") return { name: "devices" };
+  if (parts[0] === "device") return { name: "device-code", code: parts[1] ?? "" };
   return { name: "projects" };
 }
 

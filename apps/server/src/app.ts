@@ -10,6 +10,8 @@ import { invitationRoutes } from "./routes/invitations.js";
 import { projectRoutes } from "./routes/projects.js";
 import { sessionRoutes } from "./routes/session.js";
 import { workRoutes } from "./routes/work.js";
+import { agentRoutes } from "./routes/agents.js";
+import { agentMiddleware } from "./agents.js";
 
 export const SERVER_VERSION = "0.1.0";
 
@@ -30,6 +32,7 @@ export function createApi(ctx: AppContext): Hono<Env> {
     c.header("Cache-Control", "no-store");
   });
   api.use("*", sessionMiddleware(ctx));
+  api.use("*", agentMiddleware(ctx));
   api.use("*", csrfMiddleware(ctx));
 
   api.get("/health", (c) => c.json({ status: "ok", version: SERVER_VERSION, schema_version: schemaVersion(ctx.db) }));
@@ -38,6 +41,7 @@ export function createApi(ctx: AppContext): Hono<Env> {
   api.route("/projects", workRoutes(ctx));
   api.route("/invitations", invitationRoutes(ctx));
   api.route("/devices", deviceRoutes(ctx));
+  api.route("/", agentRoutes(ctx));
   return api;
 }
 

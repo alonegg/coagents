@@ -33,3 +33,13 @@ export const ROLE_PERMISSIONS: Record<ProjectRole, readonly Permission[]> = {
 export function roleAllows(role: ProjectRole, permission: Permission): boolean {
   return ROLE_PERMISSIONS[role].includes(permission);
 }
+
+const SCOPE_PERMISSIONS: Record<"read" | "write", readonly Permission[]> = {
+  read: ["project.read"],
+  write: ["task.write", "artifact.write_own"],
+};
+
+// Agents never manage members, review, archive or transfer, whatever their user's role.
+export function agentAllows(role: ProjectRole, scopes: readonly ("read" | "write")[], permission: Permission): boolean {
+  return roleAllows(role, permission) && scopes.some((s) => SCOPE_PERMISSIONS[s].includes(permission));
+}

@@ -18,6 +18,8 @@ export const ErrorCode = z.enum([
   "invitation_invalid",
   "already_member",
   "not_allowed",
+  "authorization_pending",
+  "expired_token",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 

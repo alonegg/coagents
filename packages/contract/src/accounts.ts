@@ -110,3 +110,51 @@ export const DeviceView = z.object({
   current: z.boolean(),
 });
 export type DeviceView = z.infer<typeof DeviceView>;
+
+// Agent scopes. An agent's effective permissions are its user's current role intersected with these.
+export const AgentScope = z.enum(["read", "write"]);
+export type AgentScope = z.infer<typeof AgentScope>;
+
+export const DeviceCodeRequest = z
+  .object({
+    project_id: z.string().min(1).max(64),
+    client_label: z.string().trim().min(1).max(80),
+    scopes: z.array(AgentScope).min(1).max(2),
+  })
+  .strict();
+
+export const DeviceCodeGrant = z.object({
+  device_code: z.string(),
+  user_code: z.string(),
+  verification_url: z.string(),
+  expires_in: z.number(),
+  interval: z.number(),
+});
+export type DeviceCodeGrant = z.infer<typeof DeviceCodeGrant>;
+
+export const DeviceTokenResult = z.union([
+  z.object({ status: z.literal("pending") }),
+  z.object({
+    status: z.literal("approved"),
+    agent_token: z.string(),
+    client_id: z.string(),
+    device_id: z.string(),
+    project_id: z.string(),
+    scopes: z.array(AgentScope),
+  }),
+]);
+export type DeviceTokenResult = z.infer<typeof DeviceTokenResult>;
+
+export const AgentConnectionView = z.object({
+  id: z.string(),
+  label: z.string(),
+  user_id: z.string(),
+  username: z.string(),
+  device_id: z.string(),
+  device_label: z.string(),
+  scopes: z.array(AgentScope),
+  created_at: z.string(),
+  last_seen_at: z.string().nullable(),
+  verified_at: z.string().nullable(),
+});
+export type AgentConnectionView = z.infer<typeof AgentConnectionView>;

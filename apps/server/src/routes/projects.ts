@@ -15,6 +15,7 @@ import { requireAuth, type Env } from "../auth.js";
 import { nowIso, type AppContext } from "../context.js";
 import { HttpError, invalid, notAllowed, notFound } from "../http-error.js";
 import { hashSecret, newId, newSecret } from "../ids.js";
+import { expireLeases } from "../tasks.js";
 import { parseBody } from "../validate.js";
 
 const PROJECT_COLUMNS = "p.id, p.name, p.description, p.lifecycle, p.timezone, m.role, p.created_at, p.updated_at";
@@ -130,6 +131,8 @@ export function projectRoutes(ctx: AppContext): Hono<Env> {
     const now = nowIso(ctx);
     ctx.db.transaction(() => {
       ctx.db.prepare("DELETE FROM memberships WHERE project_id = ? AND user_id = ?").run(access.projectId, targetId);
+      ctx.db.prepare("UPDATE clients SET revoked_at = ? WHERE project_id = ? AND user_id = ? AND revoked_at IS NULL").run(now, access.projectId, targetId);
+      expireLeases(ctx, { projectId: access.projectId, userId: targetId });
       ctx.db
         .prepare(
           `UPDATE ownership_transfers SET resolved_at = ?, outcome = 'cancelled'

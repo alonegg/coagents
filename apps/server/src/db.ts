@@ -185,6 +185,38 @@ const MIGRATIONS: readonly string[] = [
   ) STRICT;
   CREATE INDEX idempotency_by_age ON idempotency(created_at);
   `,
+  `
+  CREATE TABLE clients (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    user_id TEXT NOT NULL REFERENCES users(id),
+    device_id TEXT NOT NULL REFERENCES devices(id),
+    label TEXT NOT NULL,
+    scopes TEXT NOT NULL,
+    token_hash TEXT UNIQUE,
+    created_at TEXT NOT NULL,
+    last_seen_at TEXT,
+    verified_at TEXT,
+    revoked_at TEXT
+  ) STRICT;
+  CREATE INDEX clients_by_project ON clients(project_id);
+
+  CREATE TABLE device_codes (
+    id TEXT PRIMARY KEY,
+    device_code_hash TEXT NOT NULL UNIQUE,
+    user_code TEXT NOT NULL UNIQUE,
+    project_id TEXT NOT NULL,
+    client_label TEXT NOT NULL,
+    scopes TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    approved_by TEXT REFERENCES users(id),
+    approved_at TEXT,
+    client_id TEXT REFERENCES clients(id),
+    consumed_at TEXT,
+    denied_at TEXT
+  ) STRICT;
+  `,
 ];
 
 export function openDb(path: string): Db {

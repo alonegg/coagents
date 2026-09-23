@@ -8,6 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@hono/node-server':
+        specifier: ^2.1.1
+        version: 2.1.1(hono@4.13.8)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.30.0
+        version: 1.30.0(zod@4.6.5)
       '@types/node':
         specifier: ^22.19.0
         version: 22.20.4
@@ -76,6 +82,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(zod@4.6.5)
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
 
   packages/contract:
     dependencies:
