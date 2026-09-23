@@ -25,7 +25,7 @@ export function AgentsTab({ project, session }: { project: ProjectView; session:
   return (
     <>
       <p className="muted">
-        在自己的电脑上运行 <code>coagents login --server {location.origin} --project {project.id}</code>，然后在这里批准终端显示的确认码。
+        在自己的电脑上安装 <code>npm install -g coagents</code>，在代码目录运行 <code>coagents login --server {location.origin} --project {project.id}</code>，然后批准终端显示的确认码。
         {manager ? " 你可以看到并撤销本项目所有成员的连接。" : " 你只能看到自己的连接。"}
       </p>
       {error && <p className="error">{error}</p>}

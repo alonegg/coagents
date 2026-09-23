@@ -15,11 +15,11 @@
 
 ## 让你的 Agent 接入项目
 
-Connector 目前从本仓库运行（需要 Node.js 22）：
+安装 Connector（需要 Node.js 22.12 或更高版本）：
 
 ```bash
-git clone git@github.com:alonegg/coagents.git && cd coagents && pnpm install && pnpm build
-alias coagents="node $PWD/packages/connector/dist/main.js"
+npm install -g coagents
+coagents --version
 ```
 
 在你的代码工作目录中：

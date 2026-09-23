@@ -25,6 +25,7 @@ PRD 已区分用户明确决定与产品建议。当前建议任务经“提交�
 
 - 多人分布使用是第一版核心：远程接入、跨设备 Git 交接、实时通知、里程碑/截止日期和成果全文搜索全部必需。以真实三账户、两台独立机器、两种客户端验证，单机模式不替代团队版本验收。
 - 产品显示名为 `CoAgents`，Web 入口称 `CoAgents Hub`；暂定 CLI、MCP server ID 与状态目录为 `coagents`、`coagents`、`.coagents`。
+- Connector 以 npm 包 `coagents`（MIT）分发：`npm install -g coagents`。
 - 技术栈：TypeScript pnpm monorepo（Hono + SQLite 服务端、React Hub、MCP stdio Connector）；首批客户端 Claude Code 与 Codex CLI。
 - 团队服务只保存协作所需的结构化数据，不读取 Agent 对话全文或代码仓库内容。
 - 同伴事件一律作为不可信数据展示；远端消息不得转成命令执行。

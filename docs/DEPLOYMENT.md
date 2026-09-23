@@ -54,6 +54,18 @@ systemctl stop coagents && mv /var/lib/coagents /var/lib/coagents.before-restore
 
 实例上保留验收产生的测试数据：账户 `e2e-contrib`、`e2e-viewer`（活跃）与 18 个 `load-*` 压测账户（已停用）；名称以 M1–M8 开头的项目为各里程碑验收项目，容量测试项目已软删除。正式使用前可按需归档或删除这些项目。
 
+## 发布 Connector（npm 包 `coagents`）
+
+版本号只改 `packages/connector/package.json` 与 `packages/connector/src/server.ts` 中的 `CONNECTOR_VERSION`（有测试保证二者一致）。发布目录是打包生成的 `packages/connector/.pkg`，仓库里的工作区包标为 private，不能直接发布。
+
+```bash
+pnpm test && pnpm -F coagents bundle
+scripts/release-scan.sh ~/.coagents-secrets/hygiene-patterns.txt packages/connector/.pkg
+cd packages/connector/.pkg && npm publish --access public --registry=https://registry.npmjs.org
+```
+
+全新机器安装验证：`e2e-remote.yml` 以 `milestone=npm-clean` 运行，从 tarball 全局安装后完成登录、两种客户端配置、真实调用、卸载与 `npm uninstall -g`，检查无残留。
+
 ## 已知风险
 
 - 主机位于中国大陆。未备案域名在 80/443 上可能被云厂商拦截；2026-09-23 用 Host 头实测 HTTP 未被拦截，需在部署 HTTPS 后持续观察。

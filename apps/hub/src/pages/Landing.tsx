@@ -21,7 +21,7 @@ const FEATURES = [
 
 const STEPS: [string, string, string | null][] = [
   ["加入团队", "申请账号并等待管理员审批，或打开项目负责人发来的邀请链接。", null],
-  ["接入你的 Agent", "在自己的电脑、自己的代码目录里授权一次，确认码在 Hub 中批准。", "coagents login --server <服务地址> --project <项目 ID>\ncoagents install claude-code   # 或 codex"],
+  ["接入你的 Agent", "在自己的电脑、自己的代码目录里授权一次，确认码在 Hub 中批准。", "npm install -g coagents\ncoagents login --server <服务地址> --project <项目 ID>\ncoagents install claude-code   # 或 codex"],
   ["一起推进", "Agent 读取上下文、认领任务、提交成果；你在 Hub 里验收、调整里程碑。", null],
 ];
 
