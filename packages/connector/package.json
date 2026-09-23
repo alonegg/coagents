@@ -1,0 +1,11 @@
+{
+  "name": "@coagents/connector",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "coagents": "./dist/main.js" },
+  "dependencies": {
+    "@coagents/contract": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}

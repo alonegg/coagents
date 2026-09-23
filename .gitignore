@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+.statamcp/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env.*
+.DS_Store
+.coagents-data/
