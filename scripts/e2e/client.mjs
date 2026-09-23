@@ -58,3 +58,64 @@ export function env(name) {
 export function step(msg) {
   console.log(`ok - ${msg}`);
 }
+
+// Follows an SSE stream, calling onEvent(seq, data) for each new event and onControl(name, data)
+// for ready/revoked. Returns { stop, done, cursor() }.
+export function follow(url, headers, { onEvent, onControl }) {
+  const abort = new AbortController();
+  let cursor = 0;
+  const done = (async () => {
+    const res = await fetch(url, { headers: { accept: "text/event-stream", ...headers }, signal: abort.signal });
+    if (!res.ok) {
+      onControl?.("http", res.status);
+      return;
+    }
+    const decoder = new TextDecoder();
+    let buf = "";
+    try {
+      for await (const chunk of res.body) {
+        buf += decoder.decode(chunk, { stream: true });
+        let i;
+        while ((i = buf.indexOf("\n\n")) >= 0) {
+          const block = buf.slice(0, i);
+          buf = buf.slice(i + 2);
+          let event = "message";
+          let id;
+          const data = [];
+          for (const line of block.split("\n")) {
+            if (line.startsWith("event:")) event = line.slice(6).trim();
+            else if (line.startsWith("id:")) id = line.slice(3).trim();
+            else if (line.startsWith("data:")) data.push(line.slice(5).trim());
+          }
+          if (!data.length) continue;
+          const parsed = JSON.parse(data.join("\n"));
+          if (id !== undefined) {
+            cursor = Number(id);
+            onEvent?.(cursor, parsed);
+          } else onControl?.(event, parsed);
+        }
+      }
+    } catch (err) {
+      if (err.name !== "AbortError") throw err;
+    }
+    onControl?.("closed");
+  })();
+  return { stop: () => abort.abort(), done, cursor: () => cursor };
+}
+
+export function cookieHeader(client) {
+  return { cookie: [...client.cookies].map(([k, v]) => `${k}=${v}`).join("; ") };
+}
+
+export function waitFor(check, timeoutMs, label) {
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const tick = () => {
+      const v = check();
+      if (v) return resolve(v);
+      if (Date.now() - start > timeoutMs) return reject(new Error(`timed out waiting for ${label}`));
+      setTimeout(tick, 25);
+    };
+    tick();
+  });
+}
