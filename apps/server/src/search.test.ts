@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { drainIndexQueue, segment, toFtsQuery } from "./search.js";
+import { drainIndexQueue, resumeIndexing, segment, toFtsQuery } from "./search.js";
 import { seedUser, testEnv, type Browser, type TestEnv } from "./test-helpers.js";
 
 let n = 0;
@@ -144,6 +144,17 @@ describe("full-text search", () => {
     await drainIndexQueue(env.ctx);
     expect((await search(zhou, pid, "沿用")).total).toBe(1);
     expect((await search(zhou, pid, "引入")).total).toBe(1);
+  });
+
+  it("indexes published versions that were never indexed when the server starts", async () => {
+    const { env, pid, owner, zhou } = await setup();
+    await publishMd(owner, pid, "旧成果", "早于检索功能发布的内容：鹦鹉螺");
+    await drainIndexQueue(env.ctx);
+    env.ctx.db.exec("DELETE FROM search_fts; DELETE FROM search_docs;");
+    expect((await search(zhou, pid, "鹦鹉螺")).total).toBe(0);
+    resumeIndexing(env.ctx);
+    await drainIndexQueue(env.ctx);
+    expect((await search(zhou, pid, "鹦鹉螺")).total).toBe(1);
   });
 
   it("rejects empty queries", async () => {

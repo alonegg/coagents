@@ -33,7 +33,7 @@ printf '%s' "$PW" | coagents-admin setup --username <用户> --display-name <显
 printf '%s' "$PW" | coagents-admin reset-password --username <用户>   # 重置密码并撤销其全部会话 # [待验证]
 # 日常的注册审批、停用、临时密码与维护者任命在 Hub 的"后台"完成（实例维护者可见）。
 coagents-admin disable-user --username <用户>                          # 停用账户，撤销会话与 Agent 连接
-coagents-admin reindex                                                 # 从受管成果重建全文索引 # [待验证]
+coagents-admin reindex                                                 # 从受管成果重建全文索引
 ```
 
 Owner 忘记密码时，由实例维护者用 `reset-password` 恢复；项目所有权不受影响。

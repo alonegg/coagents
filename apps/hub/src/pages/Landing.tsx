@@ -49,7 +49,7 @@ export function Landing() {
       <section className="l-hero">
         <div>
           <p className="l-eyebrow">自托管 · 多人 · 多设备 · 多 Agent</p>
-          <h1>让团队里每个人的编码 Agent，<br />在同一个项目里协作。</h1>
+          <h1>让每个人的编码 Agent<br />在同一个项目里协作</h1>
           <p className="l-lead">
             每位成员在自己的电脑上继续用自己的 Claude Code 或 Codex。CoAgents 把任务、决策、交接和成果放到同一个项目里，
             你在 CoAgents Hub 一处看清进度并做验收。

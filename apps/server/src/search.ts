@@ -74,8 +74,13 @@ export function drainIndexQueue(ctx: AppContext): Promise<void> {
   return running;
 }
 
-// On start: anything left pending by a restart is indexed again.
+// On start: anything left pending by a restart is indexed again, and published versions that were
+// never indexed (e.g. published before search existed) are added.
 export function resumeIndexing(ctx: AppContext): void {
+  const missing = ctx.db
+    .prepare("SELECT v.id FROM artifact_versions v LEFT JOIN search_docs d ON d.artifact_version_id = v.id WHERE v.state = 'published' AND d.artifact_version_id IS NULL")
+    .all() as { id: string }[];
+  for (const { id } of missing) enqueueIndex(ctx, id);
   for (const r of ctx.db.prepare("SELECT artifact_version_id FROM search_docs WHERE index_state = 'pending'").all() as { artifact_version_id: string }[]) {
     queue.add(r.artifact_version_id);
   }
