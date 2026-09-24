@@ -1,4 +1,4 @@
-import { AgentScope, DeviceCodeRequest, MIN_CONNECTOR_VERSION, PROTOCOL_VERSION, type AgentConnectionView, type DeviceCodeGrant, type DeviceTokenResult } from "@coagents/contract";
+import { AgentPolicyInput, AgentScope, ClientPauseInput, DeviceCodeRequest, INTERRUPT_KINDS, MIN_CONNECTOR_VERSION, PROTOCOL_VERSION, type AgentConnectionView, type DeviceCodeGrant, type DeviceTokenResult } from "@coagents/contract";
 import { Hono } from "hono";
 import { randomInt } from "node:crypto";
 import { z } from "zod";
@@ -11,6 +11,9 @@ import { hashSecret, newId, newSecret } from "../ids.js";
 import { expireLeases } from "../tasks.js";
 import { wakeAuthChanged } from "../bus.js";
 import { parseBody } from "../validate.js";
+import { agentPause, interruptLimit } from "../attention.js";
+import { appendEvent } from "../events.js";
+import { humanActor } from "./projects.js";
 
 const CODE_TTL_SECONDS = 600;
 const POLL_INTERVAL_SECONDS = 5;
@@ -184,6 +187,8 @@ export function agentRoutes(ctx: AppContext): Hono<Env> {
       protocol_version: PROTOCOL_VERSION,
       min_connector_version: MIN_CONNECTOR_VERSION,
       lease_minutes: ctx.config.leaseMinutes,
+      paused: agentPause(ctx, agent.projectId, agent.clientId),
+      interrupt_limit_per_person: interruptLimit(ctx, agent.projectId),
     });
   });
 
@@ -200,7 +205,7 @@ export function agentRoutes(ctx: AppContext): Hono<Env> {
     const all = access.role === "owner" || access.role === "admin";
     const rows = ctx.db
       .prepare(
-        `SELECT cl.id, cl.label, cl.user_id, u.username, cl.device_id, d.label AS device_label, cl.scopes, cl.created_at, cl.last_seen_at, cl.verified_at,
+        `SELECT cl.id, cl.label, cl.user_id, u.username, cl.device_id, d.label AS device_label, cl.scopes, cl.created_at, cl.last_seen_at, cl.verified_at, cl.paused_at,
                 COALESCE(cu.delivered_seq, 0) AS delivered_seq, COALESCE(cu.last_seen_seq, 0) AS read_seq
          FROM clients cl JOIN users u ON u.id = cl.user_id JOIN devices d ON d.id = cl.device_id
          LEFT JOIN cursors cu ON cu.consumer_kind = 'client' AND cu.consumer_id = cl.id AND cu.project_id = cl.project_id
@@ -209,6 +214,100 @@ export function agentRoutes(ctx: AppContext): Hono<Env> {
       )
       .all(access.projectId, all ? 1 : 0, auth.user.id) as (Omit<AgentConnectionView, "scopes"> & { scopes: string })[];
     return c.json({ agents: rows.map((r) => ({ ...r, scopes: JSON.parse(r.scopes) as string[] })) });
+  });
+
+  // The human side of the boundary: pause every agent in the project, and set how many
+  // agent-caused notifications one person accepts per day.
+  r.put("/projects/:id/agent-policy", async (c) => {
+    const auth = requireAuth(c);
+    const access = projectAccess(ctx, auth.user.id, c.req.param("id"));
+    requirePermission(access, "agent.revoke_any");
+    requireActive(access);
+    const input = await parseBody(c, AgentPolicyInput);
+    const now = nowIso(ctx);
+    ctx.db.transaction(() => {
+      const cur = ctx.db.prepare("SELECT agents_paused_at FROM projects WHERE id = ?").get(access.projectId) as { agents_paused_at: string | null };
+      if (input.agents_paused !== undefined && input.agents_paused !== (cur.agents_paused_at !== null)) {
+        ctx.db
+          .prepare("UPDATE projects SET agents_paused_at = ?, agents_paused_by = ? WHERE id = ?")
+          .run(input.agents_paused ? now : null, input.agents_paused ? auth.user.id : null, access.projectId);
+        appendEvent(ctx, access.projectId, humanActor(auth), {
+          kind: input.agents_paused ? "project.agents_paused" : "project.agents_resumed",
+          subjectType: "project",
+          subjectId: access.projectId,
+          summary: input.agents_paused ? "暂停了项目内所有 Agent 的写入" : "恢复了项目内 Agent 的写入",
+          data: {},
+        });
+        audit(ctx, { projectId: access.projectId, actorUserId: auth.user.id, action: input.agents_paused ? "project.agents_pause" : "project.agents_resume", objectType: "project", objectId: access.projectId });
+      }
+      if (input.interrupt_limit !== undefined) {
+        ctx.db.prepare("UPDATE projects SET agent_interrupt_limit = ? WHERE id = ?").run(input.interrupt_limit, access.projectId);
+        audit(ctx, { projectId: access.projectId, actorUserId: auth.user.id, action: "project.interrupt_limit", objectType: "project", objectId: access.projectId, detail: { limit: input.interrupt_limit } });
+      }
+    })();
+    const p = ctx.db.prepare("SELECT agents_paused_at, agent_interrupt_limit FROM projects WHERE id = ?").get(access.projectId);
+    return c.json(p);
+  });
+
+  // Pausing one connection: its owner or a project manager. Reads keep working; writes are refused.
+  r.put("/projects/:id/agents/:clientId/pause", async (c) => {
+    const auth = requireAuth(c);
+    const access = projectAccess(ctx, auth.user.id, c.req.param("id"));
+    const row = ctx.db
+      .prepare("SELECT user_id FROM clients WHERE id = ? AND project_id = ? AND revoked_at IS NULL")
+      .get(c.req.param("clientId"), access.projectId) as { user_id: string } | undefined;
+    if (!row) throw notFound();
+    requirePermission(access, row.user_id === auth.user.id ? "agent.connect_own" : "agent.revoke_any");
+    const input = await parseBody(c, ClientPauseInput);
+    ctx.db.prepare("UPDATE clients SET paused_at = ? WHERE id = ?").run(input.paused ? nowIso(ctx) : null, c.req.param("clientId"));
+    audit(ctx, { projectId: access.projectId, actorUserId: auth.user.id, action: input.paused ? "agent.pause" : "agent.resume", objectType: "client", objectId: c.req.param("clientId") });
+    return c.json({ paused: input.paused });
+  });
+
+  // Everything acting in my name, across projects: what each connection holds and did lately.
+  r.get("/me/agents", (c) => {
+    const auth = requireAuth(c);
+    const since = new Date(ctx.clock().getTime() - 24 * 3600_000).toISOString();
+    const now = nowIso(ctx);
+    const clients = ctx.db
+      .prepare(
+        `SELECT cl.id, cl.label, cl.project_id, p.name AS project_name, p.agents_paused_at AS project_paused_at, cl.device_id, d.label AS device_label,
+                cl.scopes, cl.created_at, cl.last_seen_at, cl.paused_at
+         FROM clients cl JOIN devices d ON d.id = cl.device_id JOIN projects p ON p.id = cl.project_id
+         JOIN memberships m ON m.project_id = cl.project_id AND m.user_id = cl.user_id
+         WHERE cl.user_id = ? AND cl.revoked_at IS NULL AND d.revoked_at IS NULL AND p.deleted_at IS NULL
+         ORDER BY COALESCE(cl.last_seen_at, cl.created_at) DESC`,
+      )
+      .all(auth.user.id) as { id: string; project_id: string; scopes: string }[];
+    return c.json({
+      agents: clients.map((cl) => {
+        const holding = ctx.db
+          .prepare("SELECT id, title, lease_until FROM tasks WHERE holder_kind = 'client' AND holder_id = ? AND status = 'in_progress' AND lease_until > ?")
+          .all(cl.id, now);
+        const subs = ctx.db
+          .prepare("SELECT COALESCE(outcome, 'pending') AS outcome, COUNT(*) AS n FROM task_submissions WHERE submitted_by_client = ? GROUP BY 1")
+          .all(cl.id) as { outcome: string; n: number }[];
+        const recent = ctx.db
+          .prepare("SELECT kind, summary, subject_type, subject_id, created_at FROM events WHERE actor_client_id = ? ORDER BY seq DESC LIMIT 5")
+          .all(cl.id);
+        const interrupts = (
+          ctx.db
+            .prepare(
+              `SELECT COUNT(*) AS n FROM notifications n JOIN events e ON e.seq = n.event_seq
+               WHERE e.actor_client_id = ? AND n.kind IN (${INTERRUPT_KINDS.map(() => "?").join(", ")}) AND n.created_at > ?`,
+            )
+            .get(cl.id, ...INTERRUPT_KINDS, since) as { n: number }
+        ).n;
+        return {
+          ...cl,
+          scopes: JSON.parse(cl.scopes) as string[],
+          holding,
+          submissions: Object.fromEntries(subs.map((s) => [s.outcome, s.n])),
+          recent,
+          interrupts_last_24h: interrupts,
+        };
+      }),
+    });
   });
 
   r.delete("/projects/:id/agents/:clientId", (c) => {

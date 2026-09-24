@@ -447,6 +447,15 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE ai_outputs_new RENAME TO ai_outputs;
   CREATE INDEX ai_outputs_by_subject ON ai_outputs(kind, subject_id, created_at);
   `,
+  `
+  -- Human/agent boundary: pausing agents (whole project or one connection) and a daily budget of
+  -- agent-caused notifications per person.
+  ALTER TABLE projects ADD COLUMN agents_paused_at TEXT;
+  ALTER TABLE projects ADD COLUMN agents_paused_by TEXT REFERENCES users(id);
+  ALTER TABLE projects ADD COLUMN agent_interrupt_limit INTEGER NOT NULL DEFAULT 10;
+  ALTER TABLE clients ADD COLUMN paused_at TEXT;
+  ALTER TABLE notifications ADD COLUMN muted INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function openDb(path: string): Db {

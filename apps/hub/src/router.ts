@@ -13,6 +13,7 @@ export type Route =
   | { name: "login" }
   | { name: "apply" }
   | { name: "account" }
+  | { name: "my-agents" }
   | { name: "admin"; tab: AdminTab };
 
 export type AdminTab = "overview" | "registrations" | "users" | "projects" | "settings" | "ai" | "audit";
@@ -31,6 +32,7 @@ export function parseHash(hash: string): Route {
   if (parts[0] === "login") return { name: "login" };
   if (parts[0] === "apply") return { name: "apply" };
   if (parts[0] === "account") return { name: "account" };
+  if (parts[0] === "agents") return { name: "my-agents" };
   if (parts[0] === "admin") return { name: "admin", tab: ADMIN_TABS.includes(parts[1] as AdminTab) ? (parts[1] as AdminTab) : "overview" };
   if (parts.length === 0) return { name: "home" };
   if (parts[0] === "device") return { name: "device-code", code: parts[1] ?? "" };

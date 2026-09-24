@@ -1,6 +1,6 @@
 {
   "name": "coagents",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "CoAgents Connector: connect Claude Code or Codex to a self-hosted CoAgents team service over MCP (tasks, leases, handoffs, artifacts, search).",
   "license": "MIT",
   "type": "module",

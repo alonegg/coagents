@@ -1,4 +1,5 @@
 import type { SessionView } from "@coagents/contract";
+import { MyAgentsPage } from "./pages/MyAgents.js";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, loadSession, setCsrf } from "./api.js";
 import { NotificationBell } from "./Notifications.js";
@@ -63,6 +64,7 @@ export function App() {
         <nav>
           <NotificationBell timeZone={session.user.timezone} />
           {session.user.instance_role === "maintainer" && <a href="#/admin">后台</a>}
+          <a href="#/agents">我的 Agent</a>
           <a href="#/devices">设备</a>
           <a href="#/account">账户</a>
           <span className="muted">{session.user.display_name}（{session.user.username}）</span>
@@ -76,6 +78,7 @@ export function App() {
         {route.name === "admin" && (session.user.instance_role === "maintainer" ? <AdminPage tab={route.tab} session={session} /> : <p className="muted">页面不存在。</p>)}
         {route.name === "project" && <ProjectPage route={route} session={session} />}
         {route.name === "devices" && <DevicesPage session={session} />}
+        {route.name === "my-agents" && <MyAgentsPage session={session} />}
         {route.name === "device-code" && <DeviceCodePage code={route.code} session={session} />}
       </main>
     </div>

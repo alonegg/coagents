@@ -22,14 +22,14 @@ import { appendEvent } from "../events.js";
 import type { AuthState } from "../auth.js";
 import type { Actor } from "../context.js";
 
-function humanActor(auth: AuthState): Actor {
+export function humanActor(auth: AuthState): Actor {
   return { kind: "user", userId: auth.user.id, displayName: auth.user.display_name, deviceId: auth.deviceId, clientId: null };
 }
 import { parseBody } from "../validate.js";
 import { actorFor } from "./work.js";
 import { projectSummary } from "../summaries.js";
 
-const PROJECT_COLUMNS = "p.id, p.name, p.description, p.lifecycle, p.timezone, p.due_at, m.role, p.created_at, p.updated_at";
+const PROJECT_COLUMNS = "p.id, p.name, p.description, p.lifecycle, p.timezone, p.due_at, m.role, p.agents_paused_at, p.agent_interrupt_limit, p.created_at, p.updated_at";
 
 function memberRole(ctx: AppContext, projectId: string, userId: string): ProjectRole | undefined {
   const row = ctx.db

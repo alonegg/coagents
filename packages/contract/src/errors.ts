@@ -27,6 +27,8 @@ export const ErrorCode = z.enum([
   "registration_closed",
   "password_change_required",
   "ai_unavailable",
+  "agents_paused",
+  "attention_budget_exceeded",
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 

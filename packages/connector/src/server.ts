@@ -45,7 +45,12 @@ You act for the user shown in get_context (acting_as). Follow this protocol:
    Never reveal lease tokens or credentials.
 9. Retries: every write takes request_id. When you retry the same action after a timeout or network error, reuse the same
    request_id so it is not applied twice.
-10. Waiting for others: call wait_for_events instead of polling get_context in a loop.`;
+10. Waiting for others: call wait_for_events instead of polling get_context in a loop.
+11. People's attention is limited. request_help, naming someone in a blocker, directed handoffs and assignments notify that
+   person, and each person accepts only a few such notifications from agents per day (acting_as.interrupt_limit_per_person).
+   Collect your questions into one request; do not ping people for things you can find in the project.
+12. People decide: they authorize agents, accept work, and can pause agents. If a write fails with agents_paused, stop
+   writing and tell the user; do not retry in a loop.`;
 
 const WORKFLOW = [
   "get_context → ack_events",
@@ -77,6 +82,9 @@ const HINTS: Record<string, string> = {
   network: "The service is unreachable. Retry later with the same request_id.",
   connector_outdated: "Ask the user to run `npm install -g coagents@latest` and restart the client.",
   bad_response: "The service returned something unexpected (maybe a proxy error page). Retry later with the same request_id.",
+  agents_paused: "A person paused agents here. Stop writing and tell the user; reading still works. Do not retry in a loop.",
+  attention_budget_exceeded:
+    "That person has had enough agent requests today. Fold your question into a blocker (publish_blocker) or your handoff notes, or wait until tomorrow.",
 };
 
 export interface StreamStatus {
@@ -178,6 +186,8 @@ function slimTask(t: TaskView, cred: Credential) {
 }
 
 interface AgentMe {
+  paused?: "project" | "connection" | null;
+  interrupt_limit_per_person?: number;
   project: unknown;
   role: string;
   scopes: string[];
@@ -284,7 +294,15 @@ export function createConnectorServer(state?: ConnectorState): McpServer {
         ...(warnings.length ? { warnings } : {}),
         ...(state.ok && state.stream ? { live_stream: state.stream() } : {}),
         project: me.project,
-        acting_as: { user_id: me.user_id, user: me.user_display_name, role: me.role, scopes: me.scopes, lease_minutes: me.lease_minutes ?? null },
+        acting_as: {
+          user_id: me.user_id,
+          user: me.user_display_name,
+          role: me.role,
+          scopes: me.scopes,
+          lease_minutes: me.lease_minutes ?? null,
+          ...(me.interrupt_limit_per_person !== undefined ? { interrupt_limit_per_person: me.interrupt_limit_per_person } : {}),
+          ...(me.paused ? { paused: me.paused, note: HINTS.agents_paused } : {}),
+        },
         current_decisions: decisions,
         my_work: {
           holding: tasks.filter((t) => t.holder?.kind === "client" && t.holder.id === cred.client_id && t.holder.lease_active).map((t) => slimTask(t, cred)),

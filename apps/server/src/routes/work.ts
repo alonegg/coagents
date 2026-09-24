@@ -3,6 +3,8 @@ import {
   DecisionInput,
   EditTaskInput,
   HelpRequestInput,
+  HUMAN_ONLY,
+  type HumanOnlyAction,
   HttpBlockerInput,
   HttpClaimInput,
   HttpReleaseInput,
@@ -17,13 +19,15 @@ import {
 import { Hono, type Context } from "hono";
 import { projectAccess, requireActive, requirePermission, type ProjectAccess } from "../access.js";
 import { requireAuth, type Env } from "../auth.js";
+import { agentPause, overBudget, interruptLimit } from "../attention.js";
+import { projectMetrics } from "../metrics.js";
 import type { Actor, AppContext } from "../context.js";
 import { listDecisions, publishDecision, publishGeneralBlocker } from "../decisions.js";
 import { ackCursor, appendEvent, listEvents, markStreamDelivered, MAX_EVENT_PAGE, readCursor } from "../events.js";
 import { resumeCursor, sse } from "../stream.js";
 import { describeVersions } from "../artifacts.js";
 import { sessionStillValid } from "../auth.js";
-import { invalid, notAllowed, notFound } from "../http-error.js";
+import { HttpError, invalid, notAllowed, notFound } from "../http-error.js";
 import { clientStillValid, requireAgentPermission, type AgentState } from "../agents.js";
 import { idempotent, type StoredResult } from "../idempotency.js";
 import {
@@ -43,7 +47,7 @@ import { parseBody } from "../validate.js";
 
 // Resolves the caller as a person (session) or an agent (bearer token) with project access.
 // An agent token only ever reaches its own project; any other project id looks nonexistent.
-export function actorFor(ctx: AppContext, c: Context<Env>): { actor: Actor; access: ProjectAccess; agent: AgentState | null } {
+export function actorFor(ctx: AppContext, c: Context<Env>): { actor: Actor; access: ProjectAccess; agent: AgentState | null; paused?: "project" | "connection" | null } {
   const agent = c.get("agent");
   const projectId = c.req.param("id")!;
   if (agent) {
@@ -54,6 +58,7 @@ export function actorFor(ctx: AppContext, c: Context<Env>): { actor: Actor; acce
       actor: { kind: "client", userId: agent.userId, displayName: agent.displayName, deviceId: agent.deviceId, clientId: agent.clientId },
       access,
       agent,
+      paused: agentPause(ctx, projectId, agent.clientId),
     };
   }
   const auth = requireAuth(c);
@@ -65,9 +70,24 @@ export function actorFor(ctx: AppContext, c: Context<Env>): { actor: Actor; acce
   };
 }
 
-export function checkPermission(ctx: { access: ProjectAccess; agent: AgentState | null }, permission: Permission): void {
-  if (ctx.agent) requireAgentPermission(ctx.agent, ctx.access.role, permission);
-  else requirePermission(ctx.access, permission);
+// The single gate for project writes. A paused agent (whole project or its own connection) can
+// still read but not write.
+export function checkPermission(ctx: { access: ProjectAccess; agent: AgentState | null; paused?: "project" | "connection" | null }, permission: Permission): void {
+  if (ctx.agent) {
+    requireAgentPermission(ctx.agent, ctx.access.role, permission);
+    if (permission !== "project.read" && ctx.paused) {
+      throw new HttpError(
+        423,
+        "agents_paused",
+        ctx.paused === "project" ? "A person paused all agents in this project; you can read but not write" : "A person paused this agent connection; you can read but not write",
+      );
+    }
+  } else requirePermission(ctx.access, permission);
+}
+
+// Actions on the human side of the boundary (@coagents/contract HUMAN_ONLY).
+export function requireHuman(ctx: { agent: AgentState | null }, action: HumanOnlyAction): void {
+  if (ctx.agent) throw notAllowed(`Only a person can do this: ${HUMAN_ONLY[action]}`);
 }
 
 function consumerOf(actor: Actor): { kind: "device" | "client"; id: string } {
@@ -169,7 +189,7 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
       const input = action === "accept" ? await parseBody(c, ReviewInput) : await parseBody(c, ReasonedReviewInput);
       const resolved = actorFor(ctx, c);
       const { actor, access } = resolved;
-      if (resolved.agent) throw notAllowed("Agents cannot review tasks; a person must do this in the Hub");
+      requireHuman(resolved, "task.review");
       requirePermission(access, "task.review");
       requireActive(access);
       const note = "reason" in input ? input.reason : input.note;
@@ -203,6 +223,14 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
       if (input.user_id === actor.userId) throw invalid("Ask someone other than yourself");
       const member = ctx.db.prepare("SELECT 1 FROM memberships WHERE project_id = ? AND user_id = ?").get(access.projectId, input.user_id);
       if (!member) throw invalid("user_id must be a project member");
+      // A help request is nothing but an interruption: past the person's budget it is refused.
+      if (actor.kind === "client" && overBudget(ctx, access.projectId, input.user_id)) {
+        throw new HttpError(
+          429,
+          "attention_budget_exceeded",
+          `That person already received ${interruptLimit(ctx, access.projectId)} agent requests in this project in the last 24 hours`,
+        );
+      }
       const seq = appendEvent(ctx, access.projectId, actor, {
         kind: "task.help_requested",
         subjectType: "task",
@@ -212,6 +240,13 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
       });
       return { status: 201, body: { event_seq: seq } };
     });
+  });
+
+  r.get("/:id/metrics", (c) => {
+    const { access } = actorFor(ctx, c);
+    const days = Number(c.req.query("days") ?? 30);
+    if (![7, 30, 90].includes(days)) throw invalid("days must be 7, 30 or 90");
+    return c.json(projectMetrics(ctx, access.projectId, days));
   });
 
   r.get("/:id/decisions", (c) => {

@@ -1,4 +1,6 @@
 import { wakeUser } from "./bus.js";
+import { INTERRUPT_KINDS } from "@coagents/contract";
+import { overBudget } from "./attention.js";
 import { nowIso, type Actor, type AppContext } from "./context.js";
 import { newId } from "./ids.js";
 
@@ -42,12 +44,15 @@ export function notifyForEvent(
   }
   recipients.delete(actor.userId);
   const insert = ctx.db.prepare(
-    `INSERT OR IGNORE INTO notifications (id, recipient_id, project_id, event_seq, kind, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT OR IGNORE INTO notifications (id, recipient_id, project_id, event_seq, kind, created_at, muted) VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
   const now = nowIso(ctx);
+  const agentInterrupt = actor.kind === "client" && (INTERRUPT_KINDS as readonly string[]).includes(kind);
   for (const r of recipients) {
-    insert.run(newId("ntf"), r, projectId, seq, kind, now);
-    wakeUser(r);
+    // Past the person's daily budget, agent-caused notifications are kept but not pushed or counted as unread.
+    const muted = agentInterrupt && overBudget(ctx, projectId, r);
+    insert.run(newId("ntf"), r, projectId, seq, kind, now, muted ? 1 : 0);
+    if (!muted) wakeUser(r);
   }
 }
 
@@ -63,6 +68,8 @@ export interface NotificationView {
   created_at: string;
   delivered_at: string | null;
   read_at: string | null;
+  // Over the person's daily budget of agent-caused notifications: listed, never pushed or counted.
+  muted: boolean;
 }
 
 // Re-authorized on every read: notifications of projects the user left are never returned.
@@ -70,7 +77,7 @@ export function listNotifications(ctx: AppContext, userId: string, opts: { unrea
   return ctx.db
     .prepare(
       `SELECT n.id, n.project_id, p.name AS project_name, n.kind, n.event_seq, e.summary, e.subject_type, e.subject_id,
-              n.created_at, n.delivered_at, n.read_at
+              n.created_at, n.delivered_at, n.read_at, n.muted
        FROM notifications n
        JOIN memberships m ON m.project_id = n.project_id AND m.user_id = n.recipient_id
        JOIN projects p ON p.id = n.project_id
@@ -78,7 +85,8 @@ export function listNotifications(ctx: AppContext, userId: string, opts: { unrea
        WHERE e.subject_type != 'artifact' AND n.recipient_id = ? ${opts.unreadOnly ? "AND n.read_at IS NULL" : ""} ${opts.after ? "AND n.id > ?" : ""}
        ORDER BY n.event_seq DESC LIMIT ?`,
     )
-    .all(...[userId, ...(opts.after ? [opts.after] : []), opts.limit]) as NotificationView[];
+    .all(...[userId, ...(opts.after ? [opts.after] : []), opts.limit])
+    .map((r) => ({ ...(r as NotificationView), muted: (r as { muted: number }).muted === 1 }));
 }
 
 export function unreadCount(ctx: AppContext, userId: string): number {
@@ -86,7 +94,7 @@ export function unreadCount(ctx: AppContext, userId: string): number {
     ctx.db
       .prepare(
         `SELECT COUNT(*) AS n FROM notifications n JOIN memberships m ON m.project_id = n.project_id AND m.user_id = n.recipient_id
-         WHERE n.recipient_id = ? AND n.read_at IS NULL`,
+         WHERE n.recipient_id = ? AND n.read_at IS NULL AND n.muted = 0`,
       )
       .get(userId) as { n: number }
   ).n;

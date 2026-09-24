@@ -2,6 +2,7 @@ import type { ArtifactView, MilestoneView, ProjectView, SessionView, TaskView } 
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, formatTime, requestId, STATUS_LABEL } from "../api.js";
 import { ProjectDigest } from "../Ai.js";
+import { MetricsPanel } from "./Metrics.js";
 import { useEventStream } from "../stream.js";
 
 export function OverviewTab({ project, session, onChanged }: { project: ProjectView; session: SessionView; onChanged: () => void }) {
@@ -71,6 +72,7 @@ export function OverviewTab({ project, session, onChanged }: { project: ProjectV
       </section>
 
       <ProjectDigest project={project} tz={tz} />
+      <MetricsPanel project={project} />
 
       <div className="grid2">
         <section className="panel">

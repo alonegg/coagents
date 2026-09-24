@@ -12,6 +12,7 @@ interface Notice {
   subject_id: string;
   created_at: string;
   read_at: string | null;
+  muted: boolean;
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -54,7 +55,7 @@ export function NotificationBell({ timeZone }: { timeZone: string }) {
           </div>
           {items.length === 0 && <p className="muted">暂无通知。</p>}
           <ul className="plain">
-            {items.map((n) => (
+            {items.filter((n) => !n.muted).map((n) => (
               <li key={n.id} className={n.read_at ? "muted" : ""}>
                 <span className="badge">{KIND_LABEL[n.kind] ?? n.kind}</span> {n.project_name}：{n.summary}
                 <br />
@@ -66,6 +67,19 @@ export function NotificationBell({ timeZone }: { timeZone: string }) {
               </li>
             ))}
           </ul>
+          {items.some((n) => n.muted) && (
+            <details>
+              <summary className="muted">超出 Agent 打扰上限、未单独提醒的 {items.filter((n) => n.muted).length} 条</summary>
+              <ul className="plain">
+                {items.filter((n) => n.muted).map((n) => (
+                  <li key={n.id} className="muted">
+                    <span className="badge">{KIND_LABEL[n.kind] ?? n.kind}</span> {n.project_name}：{n.summary} <small>{formatTime(n.created_at, timeZone)}</small>{" "}
+                    {n.subject_type === "task" && <a href={`#/projects/${n.project_id}/tasks/${n.subject_id}`} onClick={() => setOpen(false)}>查看</a>}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
       )}
     </div>

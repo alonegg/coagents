@@ -11,6 +11,15 @@ export function AgentsTab({ project, session }: { project: ProjectView; session:
   }, [project.id]);
   useEffect(load, [load]);
 
+  async function pause(a: AgentConnectionView) {
+    try {
+      await api("PUT", `/projects/${project.id}/agents/${a.id}/pause`, { paused: !a.paused_at });
+      load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : String(e));
+    }
+  }
+
   async function revoke(a: AgentConnectionView) {
     try {
       await api("DELETE", `/projects/${project.id}/agents/${a.id}`);
@@ -39,10 +48,17 @@ export function AgentsTab({ project, session }: { project: ProjectView; session:
                 <td>{a.label}</td>
                 <td>{a.username}</td>
                 <td>{a.scopes.includes("write") ? "读写" : "只读"}</td>
-                <td>{a.verified_at ? "已验证" : "待验证（尚未发生真实调用）"}</td>
+                <td>{a.paused_at ? <strong className="warn">已暂停</strong> : a.verified_at ? "已验证" : "待验证（尚未发生真实调用）"}</td>
                 <td title="送达表示已推送到该设备的 Connector；已读表示 Agent 已确认处理">#{a.delivered_seq} / #{a.read_seq}</td>
                 <td>{a.last_seen_at ? formatTime(a.last_seen_at, tz) : "—"}</td>
-                <td>{(manager || a.user_id === session.user.id) && <button className="link danger" onClick={() => revoke(a)}>撤销</button>}</td>
+                <td>
+                  {(manager || a.user_id === session.user.id) && (
+                    <>
+                      <button className="link" onClick={() => pause(a)}>{a.paused_at ? "恢复" : "暂停"}</button>
+                      <button className="link danger" onClick={() => revoke(a)}>撤销</button>
+                    </>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

@@ -43,6 +43,9 @@ export function ProjectPage({ route, session }: { route: { id: string; tab: Proj
           <a key={t} href={`#/projects/${project.id}/${t}`} aria-current={route.tab === t ? "page" : undefined}>{TAB_LABEL[t]}</a>
         ))}
       </nav>
+      {project.agents_paused_at && (
+        <p className="notice warn">本项目的所有 Agent 已被暂停：它们只能读取，不能写入。Owner/Admin 可以在“设置与审计”中恢复。</p>
+      )}
       {project.lifecycle === "archived" && (
         <p className="notice">项目已归档，所有内容只读。需要继续工作时，由 Owner/Admin 在“设置与审计”中恢复项目。</p>
       )}

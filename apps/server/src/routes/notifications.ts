@@ -33,7 +33,7 @@ export function notificationRoutes(ctx: AppContext): Hono<Env> {
       authorize: () => sessionStillValid(ctx, auth.sessionId),
       fetch: (cursor) => ({
         items: listNotifications(ctx, userId, { unreadOnly: false, limit: 50 })
-          .filter((n) => n.event_seq > cursor)
+          .filter((n) => n.event_seq > cursor && !n.muted)
           .reverse()
           .map((n) => ({ ...n, unread: unreadCount(ctx, userId) })),
         cursorOf: (n) => n.event_seq,

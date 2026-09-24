@@ -6,9 +6,9 @@ import { aiAvailable, aiConfig, briefingKey, DIGEST_HOURS, digestKey, latestOutp
 import { audit } from "../audit.js";
 import type { Env } from "../auth.js";
 import type { AppContext } from "../context.js";
-import { invalid, notAllowed, notFound } from "../http-error.js";
+import { invalid, notFound } from "../http-error.js";
 import { parseBody } from "../validate.js";
-import { actorFor, checkPermission } from "./work.js";
+import { actorFor, checkPermission, requireHuman } from "./work.js";
 
 const ProjectAiInput = z.object({ enabled: z.boolean() }).strict();
 const DigestInput = z.object({ hours: z.number().int().optional(), request_id: z.string().max(128).optional() }).strict();
@@ -31,7 +31,7 @@ export function aiRoutes(ctx: AppContext): Hono<Env> {
 
   r.put("/:id/ai", async (c) => {
     const resolved = actorFor(ctx, c);
-    if (resolved.agent) throw notAllowed("Only a person can change project settings");
+    requireHuman(resolved, "project.settings");
     requirePermission(resolved.access, "milestone.manage");
     requireActive(resolved.access);
     const input = await parseBody(c, ProjectAiInput);
@@ -82,7 +82,7 @@ export function aiRoutes(ctx: AppContext): Hono<Env> {
 
   r.post("/:id/tasks/:taskId/ai/prereview", (c) => {
     const resolved = actorFor(ctx, c);
-    if (resolved.agent) throw notAllowed("Pre-review is for the people who review tasks");
+    requireHuman(resolved, "ai.prereview");
     requirePermission(resolved.access, "task.review");
     const taskId = c.req.param("taskId");
     const latest = ctx.db.prepare("SELECT s.id FROM task_submissions s JOIN tasks t ON t.id = s.task_id WHERE s.task_id = ? AND t.project_id = ? ORDER BY s.created_at DESC LIMIT 1").get(taskId, resolved.access.projectId) as { id: string } | undefined;

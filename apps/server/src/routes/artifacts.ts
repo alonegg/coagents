@@ -20,7 +20,7 @@ import { notAllowed } from "../http-error.js";
 import { idempotent } from "../idempotency.js";
 import { parseBody } from "../validate.js";
 import { isManager } from "../visibility.js";
-import { actorFor, checkPermission } from "./work.js";
+import { actorFor, checkPermission, requireHuman } from "./work.js";
 
 export function artifactRoutes(ctx: AppContext): Hono<Env> {
   const r = new Hono<Env>();
@@ -85,7 +85,7 @@ export function artifactRoutes(ctx: AppContext): Hono<Env> {
   r.put("/:id/artifacts/:aid/access", async (c) => {
     const input = await parseBody(c, AccessInput);
     const x = resolve(c);
-    if (x.agent) throw notAllowed("Agents cannot change who sees an artifact");
+    requireHuman(x, "artifact.access");
     checkPermission(x, "artifact.manage_all");
     requireActive(x.access);
     const res = idempotent(ctx, x.actor, input.request_id, `artifact.access:${c.req.param("aid")}`, () => ({
@@ -104,7 +104,7 @@ export function artifactRoutes(ctx: AppContext): Hono<Env> {
   // Upload the raw bytes; the name comes from X-Filename. Files are uploaded from the Hub by people only.
   r.post("/:id/files", async (c) => {
     const x = writer(c);
-    if (x.agent) throw notAllowed("Agents cannot upload files; upload them from the Hub");
+    requireHuman(x, "artifact.upload");
     const filename = cleanFilename(decodeURIComponent(c.req.header("x-filename") ?? ""));
     const file = await storeUpload(ctx, x.access.projectId, x.actor.userId, filename, c.req.raw.body);
     return c.json({ ...file, previewable: isPreviewable(file.media_type) }, 201);

@@ -62,6 +62,8 @@ export const ProjectView = z.object({
   due_at: z.string().nullable(),
   due_overdue: z.boolean().optional(),
   role: ProjectRole,
+  agents_paused_at: z.string().nullable(),
+  agent_interrupt_limit: z.number(),
   created_at: z.string(),
   updated_at: z.string(),
 });
@@ -165,6 +167,7 @@ export const AgentConnectionView = z.object({
   verified_at: z.string().nullable(),
   delivered_seq: z.number(),
   read_seq: z.number(),
+  paused_at: z.string().nullable(),
 });
 export type AgentConnectionView = z.infer<typeof AgentConnectionView>;
 
