@@ -66,9 +66,36 @@
 - 全新机器安装、运行、卸载：无残留（`m9-clean.mjs`）。
 - 备份与恢复：演练通过，见 [部署环境](../DEPLOYMENT.md)。
 
+## Agent 协作协议 v2（2026-09-24）
+
+目标见 [Agent 协作协议](../AGENT_PROTOCOL.md) 第 7 节。环境：服务 schema v11，Connector `coagents@0.2.2`（从 npmjs.org 安装），Claude Code 2.1.281，Codex CLI 0.144.1（`-m gpt-5.5`）。同一台开发机上两个独立工作副本，各自登录为独立的 Agent 连接：Claude Code 代表 `e2e-contrib`，Codex 代表 `alone`。代码远端为本机 bare 仓库。脚本：`scripts/e2e/protocol.mjs`。任务为 slugify 小库，带 4 条验收清单。
+
+给 Agent 的指令只有一句话，没有另外说明协议：
+
+| 轮次 | 客户端 | 指令 | 结果 |
+| --- | --- | --- | --- |
+| 1 | Claude Code | 按 CoAgents 协议完成任务 X | get_context → ack → claim → get_task → 编码、提交、推送 → submit_task，c1–c4 各有证据（test/commit + 结果） |
+| — | 人 | 退回：①全角空格与 emoji 没有测试 ②`slugify(null)` 返回 `'null'` | — |
+| 2 | Claude Code | 继续任务 X；时间有限，只处理退回意见第 1 条，剩下的交给 alone | get_task 读出退回原因 → 补测试、推送 → prepare_handoff：目标用户从 members 中取得，下一步写成 4 条列表，包含第 2 条修法 |
+| 3 | Codex（默认沙箱） | 按 CoAgents 协议继续交接给你的工作 | accept_handoff 被拒（缺 commit，提示 fetch）→ 沙箱中 `.git` 只读，fetch 失败 → **没有绕过交接**，给出确切的 `git fetch` 命令请用户执行 |
+| 4 | Codex（续会话，完全访问） | 我已经 fetch，请继续 | accept_handoff 成功 → 修实现、补测试和 README → 提交推送 → submit_task，c1–c4 各有证据 |
+| — | 人 | 独立 clone 复核（7/7 通过，`slugify(null) === ''`）后接受 | 任务完成 |
+
+事件序列：`task.created → claimed(agent) → submitted(agent) → rejected(human) → claimed(agent) → handoff.prepared(agent) → claimed(agent) → handoff.accepted(agent) → submitted(agent) → accepted(human)`。每条事件都标注了执行者是人还是 Agent。
+
+实测中发现并修复的问题（第一次运行）：
+
+1. **同一台电脑、同一项目的两个工作副本共用一个凭证。** 第二次 `coagents login` 静默覆盖了第一次（而且是另一个用户），两个 Agent 实际成了同一个执行者。0.2.1 改为每个工作副本一个 Agent 连接。
+2. **工具标注 `openWorldHint: true` 导致 Codex 在 `codex exec` 中取消所有写入**（"user cancelled MCP tool call"）。0.2.2 统一改为 false；CoAgents 只作用于团队自己的服务，这个值本来就应该是 false。
+3. **待接手的交接可以被直接认领绕过**。Codex 因沙箱无法 fetch，改用 claim_task 直接认领，交接一直停在待接手状态。现在指定了目标的交接为目标人保留任务；由目标人或未指定目标时直接认领，会关闭这条交接。协议文本也写明：检查失败又无法自行修复时，请用户执行命令。
+
+另外两处观察：第一次运行时，我写的退回意见第 2 条有误（README 其实已经有中文示例）；Codex 核实后如实指出，而 Claude Code 没有核实就把这一条列进了交接步骤。协议第 2 条因此加上了“核实退回原因”。Codex 默认沙箱中 `.git` 只读，所以 fetch、commit、push 都需要用户执行，或者给 Codex 放开沙箱；这属于客户端设置，不是协议问题。
+
+未覆盖：两个真实客户端都在同一台机器上运行，跨机器的代码交接以 M6（runner 上的 Connector）的结果为准。
+
 ## 未通过或待决定
 
-1. **LAN 路径未验证**（PRD 第 13 节要求 LAN 与一种跨网络路径）。需要可用的局域网环境，或由产品决定首版只以公网 HTTPS 交付。按 PRD 这是发布阻断项。
+1. **LAN 路径未验证**（PRD 第 13 节要求 LAN 与一种跨网络路径）。方案已定（真实子域名指向内网 IP，DNS-01 签发证书，见 PRD OD-04），还需要两台内网机器实测。按 PRD 这是发布阻断项。
 2. OD-03 的文件上限与预览白名单为暂定值，待确认；删除保留期未定。
 3. 两种客户端都在开发机上实测；机器 B 以 Connector CLI 作为客户端，没有安装第二个编码客户端。
 4. 主机位于中国大陆，域名未备案；目前 80/443 未被拦截，需持续观察。

@@ -12,6 +12,7 @@
 | 真实工具调用 | 2026-09-23：`codex exec -m gpt-5.5` 中调用 get_context、claim_task、prepare_handoff；交接记录由 Connector 只读读取分支与 commit |
 | Git 交接 | Codex 在开发机准备定向交接（分支 `handoff-trial/…` @ 2036617）；GitHub runner 上的 Connector 首次接手因缺少 commit 被拒并说明需 fetch 的分支，工作副本未变；fetch 后接手成功并提交待验收（`scripts/e2e/m6.mjs`） |
 | 撤销与卸载 | `coagents uninstall codex`：运行期间 Codex 自己向配置追加了项目信任条目，卸载按设计只移除 coagents 表并保留这些改动；首次实测发现卸载会残留一个分隔空行，已修复并加回归测试。测试结束后用安装前备份还原，SHA-256 与安装前一致（3492a577…）；服务端凭证已撤销 |
+| 协议 v2（2026-09-24） | 见 [验收记录](acceptance.md) 中的“Agent 协作协议 v2”。发现 `openWorldHint: true` 的工具在 `codex exec` 中会被自动取消（"user cancelled MCP tool call"），Connector 0.2.2 起所有工具都标为 closed-world。默认沙箱中 `.git` 只读，fetch/commit/push 需要用户执行或放开沙箱；Codex 会给出确切命令，不会绕过交接检查 |
 | 实时收取与重连 | 与 Claude Code 共用 Connector，见 [Claude Code 记录](claude-code.md) |
 
 建议在项目的 `.gitignore` 中加入 `.coagents/`；Connector 的工作区干净检查已排除该目录。
