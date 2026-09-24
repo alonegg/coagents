@@ -2,7 +2,7 @@
 # Release hygiene scan (docs/RELEASE_HYGIENE.md). The forbidden identifiers are NOT stored in this
 # repository: pass a file with one extended regex per line (case-insensitive) as $1 or
 # COAGENTS_HYGIENE_PATTERNS. Scans tracked files, file names, build outputs and source maps.
-# Usage: scripts/release-scan.sh ~/.coagents-secrets/hygiene-patterns.txt [extra-dir ...]
+# Usage: scripts/release-scan.sh <pattern-file> [extra-dir ...]
 set -euo pipefail
 PATTERNS=${1:-${COAGENTS_HYGIENE_PATTERNS:?pattern file required}}
 shift || true

@@ -1,6 +1,6 @@
 # CoAgents 使用指南
 
-面向团队成员。服务地址见 [部署环境](DEPLOYMENT.md)；规则以 [PRD](PRD.md) 为准。
+面向团队成员。服务地址由你们的实例管理员提供（部署方法见 [自托管部署](DEPLOYMENT.md)）；规则以 [PRD](PRD.md) 为准。
 
 ## 加入团队
 
@@ -25,7 +25,7 @@ coagents --version
 在你的代码工作目录中：
 
 ```bash
-coagents login --server https://coagents.chengdu80.org --project <项目 ID> --label "Claude Code on <电脑>"
+coagents login --server https://<服务地址> --project <项目 ID> --label "Claude Code on <电脑>"
 coagents install claude-code        # 写入本目录 .mcp.json，写入前显示差异；在 Claude Code 中批准 coagents 服务
 coagents install codex              # 或：写入 ~/.codex/config.toml 中带标记的一段
 coagents status                     # 查看当前连接、角色和权限

@@ -1,6 +1,6 @@
 # 第一版验收记录
 
-日期：2026-09-23。环境：服务 `https://coagents.chengdu80.org`（见 [部署环境](../DEPLOYMENT.md)）；机器 A 为开发机（macOS arm64），机器 B 为 GitHub 托管 runner（Ubuntu 24.04，美国网络，每次运行都是全新机器）；账户 `alone`（Owner/实例维护）、`e2e-contrib`（Contributor）、`e2e-viewer`（Viewer）；客户端 Claude Code 2.1.280、Codex CLI 0.144.1。
+日期：2026-09-23。环境：测试实例 `https://coagents.chengdu80.org`（单台 4 核 / 3.8 GB 云主机，部署方式见 [自托管部署](../DEPLOYMENT.md)）；机器 A 为开发机（macOS arm64），机器 B 为 GitHub 托管 runner（Ubuntu 24.04，美国网络，每次运行都是全新机器）；账户 `alone`（Owner/实例维护）、`e2e-contrib`（Contributor）、`e2e-viewer`（Viewer）；客户端 Claude Code 2.1.280、Codex CLI 0.144.1。
 
 自动测试：`pnpm test` 共 102 项（服务端单元与接口、Connector、真实 HTTP 服务上的集成测试，含真实 git 交接）。跨机脚本在 `scripts/e2e/`，由开发机与 `e2e-remote.yml` 工作流分别执行。
 

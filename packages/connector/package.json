@@ -4,7 +4,7 @@
   "description": "CoAgents Connector: connect Claude Code or Codex to a self-hosted CoAgents team service over MCP (tasks, leases, handoffs, artifacts, search).",
   "license": "MIT",
   "type": "module",
-  "homepage": "https://coagents.chengdu80.org",
+  "homepage": "https://github.com/alonegg/coagents#readme",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -31,5 +31,13 @@
     "@coagents/contract": "workspace:*",
     "esbuild": "^0.28.2"
   },
-  "private": true
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alonegg/coagents.git",
+    "directory": "packages/connector"
+  },
+  "bugs": {
+    "url": "https://github.com/alonegg/coagents/issues"
+  }
 }

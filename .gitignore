@@ -13,3 +13,4 @@ coverage/
 .playwright-mcp/
 packages/connector/.pkg/
 *.tgz
+deploy/deploy.env

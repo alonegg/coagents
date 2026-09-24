@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Build and roll out the current working tree to the deploy host (see docs/DEPLOYMENT.md).
-# Usage: deploy/deploy.sh   (env: DEPLOY_HOST, DEPLOY_KEY, NPM_REGISTRY)
+# Usage: deploy/deploy.sh
+# Settings come from the environment or deploy/deploy.env (not committed):
+#   DEPLOY_HOST=root@<host>   DEPLOY_KEY=<path to ssh key>   NPM_REGISTRY=<optional mirror>
 set -euo pipefail
 
-HOST=${DEPLOY_HOST:-root@<server-ip>}
-KEY=${DEPLOY_KEY:-$HOME/<ssh-key>.pem}
+ENV_FILE="$(dirname "$0")/deploy.env"
+if [[ -f "$ENV_FILE" ]]; then set -a; . "$ENV_FILE"; set +a; fi
+HOST=${DEPLOY_HOST:?set DEPLOY_HOST (e.g. root@your-host) or create deploy/deploy.env}
+KEY=${DEPLOY_KEY:?set DEPLOY_KEY to the ssh key for that host}
 REGISTRY=${NPM_REGISTRY:-https://registry.npmmirror.com}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 RELEASE=$(date -u +%Y%m%d%H%M%S)-$(git -C "$ROOT" rev-parse --short HEAD)
