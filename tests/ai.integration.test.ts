@@ -4,11 +4,10 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { serve } from "@hono/node-server";
+import { createServer } from "node:http";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createConnectorServer } from "../packages/connector/src/server.js";
-import { Hono } from "hono";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { settleAiJobs } from "../apps/server/src/ai.js";
 import { createUser } from "../apps/server/src/users.js";
@@ -35,16 +34,24 @@ const ANSWERS: Record<string, unknown> = {
 
 beforeAll(async () => {
   srv = await liveServer();
-  const app = new Hono();
-  app.post("/v1/chat/completions", async (c) => {
-    const body = await c.req.json();
-    seen.push({ auth: c.req.header("authorization"), body });
-    const name = body.response_format?.json_schema?.name as string;
-    const content = mode === "garbage" ? "not json at all" : JSON.stringify(ANSWERS[name]);
-    return c.json({ model: "fake-model", choices: [{ message: { content } }], usage: { prompt_tokens: 100, completion_tokens: 20 } });
+  // A fake OpenAI-compatible endpoint: answers each schema name with a fixed, valid output.
+  const server = createServer((req, res) => {
+    let raw = "";
+    req.on("data", (d: Buffer) => (raw += d.toString()));
+    req.on("end", () => {
+      const body = JSON.parse(raw);
+      seen.push({ auth: req.headers.authorization, body });
+      const name = body.response_format?.json_schema?.name as string;
+      const content = mode === "garbage" ? "not json at all" : JSON.stringify(ANSWERS[name]);
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ model: "fake-model", choices: [{ message: { content } }], usage: { prompt_tokens: 100, completion_tokens: 20 } }));
+    });
   });
   llm = await new Promise((resolve) => {
-    const s = serve({ fetch: app.fetch, hostname: "127.0.0.1", port: 0 }, (info) => resolve({ base: `http://127.0.0.1:${info.port}/v1`, close: () => s.close() }));
+    server.listen(0, "127.0.0.1", () => {
+      const port = (server.address() as { port: number }).port;
+      resolve({ base: `http://127.0.0.1:${port}/v1`, close: () => server.close() });
+    });
   });
 });
 afterAll(() => {
