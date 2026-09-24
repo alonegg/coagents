@@ -125,7 +125,7 @@ Hub 的验收视图按条目显示覆盖状态。`task.submitted` 事件的 `dat
 
 ### 4.4 交接
 
-`prepare_handoff` 的 `next_steps` 是有序列表（MCP 中必填，1–30 条）。服务端同时保存为 `next_step_items` 数组和带编号的 `next_steps` 文本。git 信息（仓库、分支、commit）由发送方 Connector 只读检查后上报，属客户端自证；未提交或未推送的代码会被拒绝。
+`prepare_handoff` 的 `next_steps` 是有序列表（MCP 中必填，1–30 条）。指定了 `target_user_id` 的交接在待接手期间为此人保留任务：其他人直接认领会被拒绝（`task_not_claimable`），管理者需要收回时先取消交接。接收方应使用 `accept_handoff`；如果接收方或未指定对象的交接被直接认领，这条交接会被关闭（`handoff.cancelled`，`reason: claimed_directly`），不会一直处于待接手状态。服务端同时保存为 `next_step_items` 数组和带编号的 `next_steps` 文本。git 信息（仓库、分支、commit）由发送方 Connector 只读检查后上报，属客户端自证；未提交或未推送的代码会被拒绝。
 
 ### 4.5 决策
 

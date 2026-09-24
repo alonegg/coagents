@@ -46,6 +46,8 @@ it("runs claim → submit with evidence → rejection read back → resubmit →
   const tools = (await mcp.listTools()).tools;
   expect(tools.find((t) => t.name === "get_task")!.annotations).toMatchObject({ readOnlyHint: true });
   expect(tools.find((t) => t.name === "submit_task")!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+  // Codex CLI cancels open-world tool calls it cannot ask about in `codex exec`.
+  expect(tools.every((t) => t.annotations?.openWorldHint === false)).toBe(true);
 
   const task = (
     await owner.call("POST", `/projects/${pid}/tasks`, {
@@ -160,4 +162,21 @@ it("keeps checklist ids stable, types blockers, labels authors and dedupes retri
   await call("claim_task", { task_id: t.id });
   const h = (await call("prepare_handoff", { task_id: t.id, summary: "写了一半", next_steps: ["补卸载", "校对"], include_git: false })).value;
   expect(h).toMatchObject({ next_step_items: ["补卸载", "校对"], next_steps: "1. 补卸载\n2. 校对", from: { author_kind: "agent" } });
+
+  // Claiming around an unaddressed handoff closes it instead of leaving it pending.
+  const direct = (await call("claim_task", { task_id: t.id })).value;
+  expect(direct.closed_handoff).toContain(h.id);
+  expect((await call("list_handoffs", { state: "cancelled", task_id: t.id })).value.handoffs.map((x: any) => x.id)).toEqual([h.id]);
+
+  // A handoff addressed to someone reserves the task for them.
+  const other = await signIn(srv.base, srv.ctx, "q-other");
+  const inv = (await owner.call("POST", `/projects/${pid}/invitations`, { role: "contributor" })).body.token;
+  await other.call("POST", `/invitations/${inv}/accept`);
+  const otherId = (await other.call("GET", "/session")).body.user.id;
+  const h2 = (await call("prepare_handoff", { task_id: t.id, summary: "交给 q-other", next_steps: ["收尾"], target_user_id: otherId, include_git: false })).value;
+  const refused = await call("claim_task", { task_id: t.id });
+  expect(refused.value.error).toMatchObject({ code: "task_not_claimable", message: expect.stringContaining("accept_handoff") });
+  const byTarget = await other.call("POST", `/projects/${pid}/tasks/${t.id}/claim`, { request_id: "req-claim-other" });
+  expect(byTarget.status).toBe(200);
+  expect(byTarget.body.closed_handoff_id).toBe(h2.id);
 });

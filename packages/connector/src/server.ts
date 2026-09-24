@@ -26,8 +26,10 @@ You act for the user shown in get_context (acting_as). Follow this protocol:
 1. Orient. Call get_context first. current_decisions bind everyone in the project. my_work lists tasks you hold, tasks
    assigned to your user and handoffs waiting for you. Process events, then ack_events with next_cursor; repeat while has_more.
 2. Take work explicitly. Before working on a task, claim_task it (or accept_handoff). Never work on a task another executor
-   holds. Read it with get_task: description, acceptance criteria (ids c1, c2, ...), earlier submissions and review notes.
-   If an earlier submission was rejected, its review_note says why; address that first.
+   holds. A task handed off to you is taken with accept_handoff, not claim_task: it checks your working copy has the
+   code. If that check fails and you cannot run the fix yourself (for example a sandbox blocks git fetch), ask the user
+   to run it, then retry. Read the task with get_task: description, acceptance criteria (ids c1, c2, ...), earlier
+   submissions and review notes. If an earlier submission was rejected, its review_note says why; verify it and address it.
 3. Keep the lease. Leases expire (see lease_until). Call renew_task_lease while you are still working. If you have to stop,
    use prepare_handoff (what is done, next_steps as a list, risks) or release_task with a note. Never leave a task silently.
 4. Report blockers. publish_blocker with task_id moves the task to blocked and ends your lease. Set kind, and
@@ -69,7 +71,9 @@ const HINTS: Record<string, string> = {
   project_archived: "The project is archived and read-only.",
   rate_limited: "Wait a moment, then retry with the same request_id.",
   handoff_blocked: "Commit and push your work (the message says which), then retry prepare_handoff.",
-  handoff_check_failed: "Follow the message (for example fetch the named branch), then retry accept_handoff. Nothing was changed locally.",
+  handoff_check_failed:
+    "Follow the message (for example fetch the named branch), then retry accept_handoff. Nothing was changed locally. " +
+    "If you cannot run the command (for example a sandbox makes .git read-only), ask the user to run it; do not claim_task around the handoff.",
   network: "The service is unreachable. Retry later with the same request_id.",
   connector_outdated: "Ask the user to run `npm install -g coagents@latest` and restart the client.",
   bad_response: "The service returned something unexpected (maybe a proxy error page). Retry later with the same request_id.",
@@ -104,9 +108,11 @@ function failure(err: unknown): CallToolResult {
   return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: { ...e, ...(hint ? { hint } : {}) } }) }] };
 }
 
-// Annotation presets. Every tool talks to the team service (openWorld); none deletes data.
-const READ: ToolAnnotations = { readOnlyHint: true, openWorldHint: true };
-const WRITE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
+// Annotation presets. The tools act only inside the team's own service (a closed world, not the
+// open web) and none deletes data. Codex CLI asks for approval of open-world tools, which cancels
+// every write in non-interactive `codex exec`; openWorldHint must stay false.
+const READ: ToolAnnotations = { readOnlyHint: true, openWorldHint: false };
+const WRITE: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 const IDEMPOTENT_WRITE: ToolAnnotations = { ...WRITE, idempotentHint: true };
 
 const RequestIdArg = z
@@ -383,12 +389,20 @@ export function createConnectorServer(state?: ConnectorState): McpServer {
     "claim_task",
     WRITE,
     "Claim a task before working on it. Only one executor holds a task; if it is held you get task_already_held. " +
+      "If the task was handed off to you, use accept_handoff instead. " +
       "The lease is remembered by the Connector; renew it with renew_task_lease before lease_until.",
     { task_id: TaskIdArg, request_id: RequestIdArg },
     async (args, svc, cred, home) => {
-      const res = await svc.call<ClaimResult>("POST", `${p(cred)}/tasks/${args.task_id}/claim`, rid(args.request_id));
+      const res = await svc.call<ClaimResult & { closed_handoff_id?: string }>("POST", `${p(cred)}/tasks/${args.task_id}/claim`, rid(args.request_id));
       rememberLease(home, cred.client_id, args.task_id, res.lease_token);
-      return { task: res.task, lease_until: res.lease_until, next: "Read the task with get_task before starting." };
+      return {
+        task: res.task,
+        lease_until: res.lease_until,
+        ...(res.closed_handoff_id
+          ? { closed_handoff: `Handoff ${res.closed_handoff_id} was waiting for this task and is now closed; read its notes with list_handoffs(state: "cancelled").` }
+          : {}),
+        next: "Read the task with get_task before starting.",
+      };
     },
   );
 

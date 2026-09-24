@@ -70,15 +70,19 @@ describe("handoffs", () => {
     expect((await accept({ repo_identity: "https://github.com/team/app", has_commit: true, dirty: false })).status).toBe(409);
   });
 
-  it("keeps directed handoffs for their target and loses a race to a direct claim cleanly", async () => {
+  it("reserves a directed handoff for its target until someone cancels it", async () => {
     const { pid, owner, chen, wang, ids, task } = await setup();
     const h = (await prepare(chen, pid, task.id, { target_user_id: ids.wang })).body;
     const check = { repo_identity: "github.com/team/app", has_commit: true, dirty: false };
     expect((await owner.json("POST", `/v1/projects/${pid}/handoffs/${h.id}/accept`, { check, request_id: rid() })).status).toBe(403);
-    await owner.json("POST", `/v1/projects/${pid}/tasks/${task.id}/claim`, { request_id: rid() });
-    const lost = await wang.json("POST", `/v1/projects/${pid}/handoffs/${h.id}/accept`, { check, request_id: rid() });
-    expect(lost.body.error.code).toBe("task_already_held");
-    expect((await wang.json("GET", `/v1/projects/${pid}/handoffs/${h.id}`)).body.state).toBe("pending");
+    const refused = await owner.json("POST", `/v1/projects/${pid}/tasks/${task.id}/claim`, { request_id: rid() });
+    expect(refused.body.error.code).toBe("task_not_claimable");
+    expect(refused.body.error.message).toContain("accept_handoff");
+    // A manager who needs the task back cancels the handoff first; the target then has nothing to accept.
+    expect((await owner.json("POST", `/v1/projects/${pid}/handoffs/${h.id}/cancel`, { request_id: rid() })).status).toBe(200);
+    expect((await owner.json("POST", `/v1/projects/${pid}/tasks/${task.id}/claim`, { request_id: rid() })).status).toBe(200);
+    const late = await wang.json("POST", `/v1/projects/${pid}/handoffs/${h.id}/accept`, { check, request_id: rid() });
+    expect(late.body.error.code).toBe("handoff_check_failed");
   });
 
   it("hands over non-code work by artifact versions without inventing git data", async () => {

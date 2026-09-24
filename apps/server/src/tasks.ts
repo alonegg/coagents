@@ -204,7 +204,32 @@ function requireTransition(action: TaskAction, row: TaskRow): TaskStatus {
   return to;
 }
 
-export function claimTask(ctx: AppContext, projectId: string, actor: Actor, taskId: string): ClaimResult {
+// A pending handoff reserves the task for its addressee, who takes it with accept_handoff. Anyone
+// else claiming it directly is refused; a direct claim by the addressee (or of an unaddressed
+// handoff) closes the handoff, so it never stays pending next to a new holder.
+function settlePendingHandoff(ctx: AppContext, projectId: string, actor: Actor, row: TaskRow): string | null {
+  const h = ctx.db
+    .prepare(
+      `SELECT h.id, h.target_user_id, u.display_name AS target_name FROM handoffs h LEFT JOIN users u ON u.id = h.target_user_id
+       WHERE h.task_id = ? AND h.state = 'pending'`,
+    )
+    .get(row.id) as { id: string; target_user_id: string | null; target_name: string | null } | undefined;
+  if (!h) return null;
+  if (h.target_user_id && h.target_user_id !== actor.userId) {
+    throw new HttpError(409, "task_not_claimable", `This task was handed off to ${h.target_name ?? "someone else"}, who takes it over with accept_handoff (handoff ${h.id})`);
+  }
+  ctx.db.prepare("UPDATE handoffs SET state = 'cancelled', cancelled_at = ? WHERE id = ?").run(nowIso(ctx), h.id);
+  appendEvent(ctx, projectId, actor, {
+    kind: "handoff.cancelled",
+    subjectType: "task",
+    subjectId: row.id,
+    summary: `认领任务「${row.title}」时关闭了待接手的交接`,
+    data: { handoff_id: h.id, reason: "claimed_directly" },
+  });
+  return h.id;
+}
+
+export function claimTask(ctx: AppContext, projectId: string, actor: Actor, taskId: string, opts: { viaHandoff?: boolean } = {}): ClaimResult & { closed_handoff_id?: string } {
   const row = loadRow(ctx, projectId, taskId);
   const now = ctx.clock();
   const nowS = now.toISOString();
@@ -214,6 +239,7 @@ export function claimTask(ctx: AppContext, projectId: string, actor: Actor, task
   if (!canClaim(row.status, leaseActive(row, nowS))) {
     throw new HttpError(409, "task_not_claimable", `A task that is ${row.status} cannot be claimed`);
   }
+  const closed = opts.viaHandoff ? null : settlePendingHandoff(ctx, projectId, actor, row);
   const token = newSecret();
   const leaseUntil = new Date(now.getTime() + ctx.config.leaseMinutes * 60_000).toISOString();
   const holderId = actor.kind === "client" ? actor.clientId! : actor.userId;
@@ -232,7 +258,7 @@ export function claimTask(ctx: AppContext, projectId: string, actor: Actor, task
     summary: `认领任务「${row.title}」`,
     data: { from_status: row.status, lease_until: leaseUntil, ...(row.holder_id && row.holder_id !== holderId ? { previous_holder: row.holder_id } : {}) },
   });
-  return { task: getTask(ctx, projectId, taskId), lease_token: token, lease_until: leaseUntil };
+  return { task: getTask(ctx, projectId, taskId), lease_token: token, lease_until: leaseUntil, ...(closed ? { closed_handoff_id: closed } : {}) };
 }
 
 // Agents prove holding with the lease token; a person proves it with the session's user and device.

@@ -177,7 +177,7 @@ export function completeHandoff(ctx: AppContext, projectId: string, actor: Actor
   const h = load(ctx, projectId, id);
   const check = h.last_check ? (JSON.parse(h.last_check) as { ok: boolean; warnings: string[] }) : null;
   if (h.state !== "pending" || !check?.ok) throw new HttpError(409, "handoff_check_failed", "Run the handoff check first");
-  const claim = claimTask(ctx, projectId, actor, h.task_id);
+  const claim = claimTask(ctx, projectId, actor, h.task_id, { viaHandoff: true });
   ctx.db.prepare("UPDATE handoffs SET state = 'accepted', accepted_at = ?, accepted_by = ? WHERE id = ?").run(nowIso(ctx), actor.userId, id);
   appendEvent(ctx, projectId, actor, {
     kind: "handoff.accepted",
