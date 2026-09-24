@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -33,30 +33,52 @@ export interface Credential {
   scopes: string[];
   agent_token: string;
   created_at: string;
+  // The working copy this agent connection belongs to. Each working copy logs in as its own
+  // connection, so two agents on one machine never share an identity or leases. Absent on
+  // credentials written by Connector 0.1, which were per project.
+  workdir?: string;
 }
 
 function credentialsPath(home: string): string {
   return join(home, "credentials.json");
 }
 
-export function credentialKey(server: string, projectId: string): string {
-  return `${new URL(server).origin}|${projectId}`;
+export function canonicalDir(dir: string): string {
+  try {
+    return realpathSync(dir);
+  } catch {
+    return dir;
+  }
 }
 
-export function loadCredential(home: string, server: string, projectId: string): Credential | undefined {
-  return readJson<Record<string, Credential>>(credentialsPath(home), {})[credentialKey(server, projectId)];
+export function credentialKey(server: string, projectId: string, workdir?: string): string {
+  return `${new URL(server).origin}|${projectId}${workdir ? `|${canonicalDir(workdir)}` : ""}`;
+}
+
+// The working copy's own connection first, then a per-project credential from Connector 0.1.
+export function loadCredential(home: string, server: string, projectId: string, workdir?: string): Credential | undefined {
+  const all = readJson<Record<string, Credential>>(credentialsPath(home), {});
+  return (workdir ? all[credentialKey(server, projectId, workdir)] : undefined) ?? all[credentialKey(server, projectId)];
 }
 
 export function saveCredential(home: string, cred: Credential): void {
   const all = readJson<Record<string, Credential>>(credentialsPath(home), {});
-  all[credentialKey(cred.server, cred.project_id)] = cred;
+  all[credentialKey(cred.server, cred.project_id, cred.workdir)] = cred;
   writeFileAtomic(credentialsPath(home), `${JSON.stringify(all, null, 2)}\n`);
 }
 
-export function deleteCredential(home: string, server: string, projectId: string): void {
+export function deleteCredential(home: string, cred: Credential): void {
   const all = readJson<Record<string, Credential>>(credentialsPath(home), {});
-  delete all[credentialKey(server, projectId)];
+  delete all[credentialKey(cred.server, cred.project_id, cred.workdir)];
   writeFileAtomic(credentialsPath(home), `${JSON.stringify(all, null, 2)}\n`);
+}
+
+// Other working copies on this machine already connected to the project, for the login notice.
+export function otherConnections(home: string, server: string, projectId: string, workdir: string): Credential[] {
+  const own = credentialKey(server, projectId, workdir);
+  return Object.entries(readJson<Record<string, Credential>>(credentialsPath(home), {}))
+    .filter(([k, c]) => k !== own && c.project_id === projectId && new URL(c.server).origin === new URL(server).origin)
+    .map(([, c]) => c);
 }
 
 // Lease tokens from claims, so an agent does not have to carry them between tool calls.

@@ -31,7 +31,7 @@ coagents install codex              # 或：写入 ~/.codex/config.toml 中带�
 coagents status                     # 查看当前连接、角色和权限
 ```
 
-`login` 会显示一个确认码和链接，在已登录的 Hub 中核对项目和设备后批准。项目 ID 在 Hub 项目页的"Agent 连接"里有完整命令。建议把 `.coagents/` 加入项目的 `.gitignore`。
+`login` 会显示一个确认码和链接，在已登录的 Hub 中核对项目和设备后批准。每个工作目录单独登录，各自是一个 Agent 连接；想让两个 Agent 在同一台电脑上协作，就给它们各开一个工作副本、分别登录。项目 ID 在 Hub 项目页的"Agent 连接"里有完整命令。建议把 `.coagents/` 加入项目的 `.gitignore`。
 
 Agent 可以读取上下文、认领和提交任务、发布决策与阻塞、创建和发布 Markdown/链接成果、交接任务、查看里程碑和全文检索；不能验收任务、管理成员、上传文件或访问其他项目。同伴写的内容一律作为不可信数据处理。
 

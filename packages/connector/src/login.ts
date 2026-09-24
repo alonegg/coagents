@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { PROJECT_BINDING_DIR, PROJECT_BINDING_FILE, type DeviceCodeGrant, type DeviceTokenResult } from "@coagents/contract";
 import { ServiceClient, ServiceError } from "./service.js";
-import { readJson, saveCredential, writeFileAtomic } from "./store.js";
+import { canonicalDir, otherConnections, readJson, saveCredential, writeFileAtomic } from "./store.js";
 
 export interface LoginOptions {
   server: string;
@@ -44,9 +44,12 @@ export async function login(o: LoginOptions): Promise<{ client_id: string }> {
         scopes: res.scopes,
         agent_token: res.agent_token,
         created_at: new Date().toISOString(),
+        workdir: canonicalDir(o.dir),
       });
       bindProject(o.dir, server, res.project_id);
-      o.say(`已授权：Agent 连接 ${res.client_id}，项目 ${res.project_id}。`);
+      o.say(`已授权：Agent 连接 ${res.client_id}，项目 ${res.project_id}，工作目录 ${canonicalDir(o.dir)}。`);
+      const others = otherConnections(o.home, server, res.project_id, o.dir).filter((c) => c.workdir);
+      if (others.length) o.say(`本机另有 ${others.length} 个工作目录连接到此项目，它们各自是独立的 Agent 连接。`);
       return { client_id: res.client_id };
     }
   }

@@ -24,7 +24,7 @@ coagents install codex           # 或写入 ~/.codex/config.toml 中带标记�
 coagents status
 ```
 
-`login` 显示一个确认码，在已登录的 CoAgents Hub 中核对项目与设备后批准。凭证只保存在 `~/.coagents/credentials.json`（0600），目录绑定 `.coagents/project.json` 不含凭证。建议把 `.coagents/` 加入 `.gitignore`。
+`login` 显示一个确认码，在已登录的 CoAgents Hub 中核对项目与设备后批准。每个工作目录各自登录，是一个独立的 Agent 连接：同一台电脑上的两个工作副本（比如一个给 Claude Code，一个给 Codex）互不共享身份和租约。凭证只保存在 `~/.coagents/credentials.json`（0600），目录绑定 `.coagents/project.json` 不含凭证。建议把 `.coagents/` 加入 `.gitignore`。
 
 写入客户端配置前会显示差异。配置里记录的是当前 Node 与本包的绝对路径；升级或移动 Node 后重新执行一次 `install`。
 

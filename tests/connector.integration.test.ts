@@ -80,7 +80,7 @@ describe("connector against a live server", () => {
 
     const binding = findProjectBinding(dir);
     expect(binding).toMatchObject({ ok: true, binding: { project_id: project.id } });
-    const cred = loadCredential(home, base, project.id)!;
+    const cred = loadCredential(home, base, project.id, dir)!;
     expect(cred.agent_token).toHaveLength(43);
     expect(readFileSync(join(dir, ".coagents", "project.json"), "utf8")).not.toContain(cred.agent_token);
 

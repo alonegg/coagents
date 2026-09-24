@@ -53,10 +53,11 @@ function state(dir: string): ConnectorState {
     };
   }
   const home = coagentsHome();
-  const credential = loadCredential(home, b.binding.server, b.binding.project_id);
-  if (!credential) return { ok: false, message: `No credential for project ${b.binding.project_id} on this device; run \`coagents login\`.` };
   // Git checks run in the bound project's root: the directory that holds .coagents/.
-  return { ok: true, credential, home, workdir: dirname(dirname(b.path)) };
+  const workdir = dirname(dirname(b.path));
+  const credential = loadCredential(home, b.binding.server, b.binding.project_id, workdir);
+  if (!credential) return { ok: false, message: `No credential for project ${b.binding.project_id} in ${workdir} on this device; run \`coagents login\` there.` };
+  return { ok: true, credential, home, workdir };
 }
 
 async function confirm(question: string): Promise<boolean> {
@@ -174,7 +175,7 @@ async function main(): Promise<void> {
       const s = state(dir);
       if (s.ok && !values["keep-credential"]) {
         await new ServiceClient(s.credential.server, s.credential.agent_token).call("DELETE", "/agent/me").catch((e: Error) => say(`Could not revoke on the server: ${e.message}`));
-        deleteCredential(s.home, s.credential.server, s.credential.project_id);
+        deleteCredential(s.home, s.credential);
         forgetClientLeases(s.home, s.credential.client_id);
         say(`Revoked and deleted the agent credential ${s.credential.client_id}.`);
         // The directory binding names this project only; remove it (and an empty .coagents/).
