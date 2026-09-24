@@ -95,7 +95,8 @@ describe("agent access", () => {
     const t = await agent.json("POST", `/v1/projects/${pid}/tasks`, { title: "agent task", request_id: rid() });
     expect(t.status).toBe(201);
     expect((await agent.json("GET", `/v1/projects/${other}/tasks`)).status).toBe(404);
-    expect((await agent.json("GET", `/v1/projects/${pid}/members`)).status).toBe(401);
+    // Agents read members to address handoffs and blockers.
+    expect((await agent.json("GET", `/v1/projects/${pid}/members`)).status).toBe(200);
     expect((await agent.json("POST", `/v1/projects/${pid}/invitations`, { role: "viewer" })).status).toBe(401);
 
     const claim = await agent.json("POST", `/v1/projects/${pid}/tasks/${t.body.id}/claim`, { request_id: rid() });

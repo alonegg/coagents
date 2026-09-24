@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NextStepItems } from "./protocol.js";
 
 const RequestId = z.string().min(8).max(128);
 const Text = z.string().trim().min(1).max(20_000);
@@ -42,14 +43,17 @@ export const PrepareHandoffInput = z
   .object({
     lease_token: z.string().min(16).max(256).optional(),
     summary: Text,
-    next_steps: Text,
+    // Either prose or a list; a list is also rendered into next_steps for older readers.
+    next_steps: Text.optional(),
+    next_step_items: NextStepItems.optional(),
     risks: z.string().max(20_000).optional(),
     target_user_id: z.string().max(64).optional(),
     git: SenderGit.optional(),
     artifact_version_ids: z.array(z.string().max(64)).max(50).default([]),
     request_id: RequestId,
   })
-  .strict();
+  .strict()
+  .refine((v) => v.next_steps !== undefined || v.next_step_items !== undefined, { message: "next_steps or next_step_items is required" });
 
 export const AcceptHandoffInput = z.object({ check: ReceiverCheck.optional(), request_id: RequestId }).strict();
 
@@ -59,10 +63,11 @@ export interface HandoffView {
   task_id: string;
   task_title: string;
   state: "pending" | "accepted" | "cancelled";
-  from: { user_id: string; display_name: string; holder_kind: "user" | "client"; device_id: string };
+  from: { user_id: string; display_name: string; holder_kind: "user" | "client"; author_kind: "human" | "agent"; device_id: string };
   target_user_id: string | null;
   summary: string;
   next_steps: string;
+  next_step_items: string[];
   risks: string | null;
   git: SenderGit | null;
   artifacts: { version_id: string; artifact_id: string | null; title: string | null; version: number | null; readable: boolean }[];

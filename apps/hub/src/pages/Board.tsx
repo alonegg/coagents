@@ -40,7 +40,8 @@ export function BoardTab({ project, session, taskId }: { project: ProjectView; s
   async function create(e: FormEvent) {
     e.preventDefault();
     try {
-      await api("POST", `/projects/${project.id}/tasks`, { title, acceptance_criteria: criteria, request_id: requestId() });
+      const items = criteria.split("\n").map((l) => l.trim()).filter(Boolean).map((text) => ({ text }));
+      await api("POST", `/projects/${project.id}/tasks`, { title, criteria: items, request_id: requestId() });
       setTitle("");
       setCriteria("");
       await load();
@@ -102,7 +103,7 @@ export function BoardTab({ project, session, taskId }: { project: ProjectView; s
           <h2>新建任务</h2>
           <form onSubmit={create} className="stack">
             <label>标题<input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} /></label>
-            <label>验收条件<textarea value={criteria} onChange={(e) => setCriteria(e.target.value)} /></label>
+            <label>验收清单（每行一条，可逐条核对）<textarea value={criteria} onChange={(e) => setCriteria(e.target.value)} placeholder={"例：POST /login 返回 200\n错误密码返回 401"} /></label>
             <button>创建任务</button>
           </form>
         </>

@@ -1,4 +1,4 @@
-import type { EventPage, EventView } from "@coagents/contract";
+import { authorKind, type EventPage, type EventView } from "@coagents/contract";
 import { nowIso, type Actor, type AppContext } from "./context.js";
 import { wakeProject } from "./bus.js";
 import { newId } from "./ids.js";
@@ -76,7 +76,13 @@ function toView(r: EventRow): EventView {
     id: r.id,
     project_id: r.project_id,
     kind: r.kind,
-    actor: { user_id: r.actor_user_id, display_name: r.display_name, client_id: r.actor_client_id, device_id: r.actor_device_id },
+    actor: {
+      user_id: r.actor_user_id,
+      display_name: r.display_name,
+      kind: authorKind(r.actor_client_id),
+      client_id: r.actor_client_id,
+      device_id: r.actor_device_id,
+    },
     subject_type: r.subject_type,
     subject_id: r.subject_id,
     summary: r.summary,

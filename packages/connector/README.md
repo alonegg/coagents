@@ -30,7 +30,9 @@ coagents status
 
 ## Agent 可用的工具
 
-`get_context` `ack_events` `list_tasks` `create_task` `claim_task` `renew_task_lease` `release_task` `submit_task` `publish_decision` `publish_blocker` `list_artifacts` `get_artifact` `create_artifact` `update_artifact_draft` `publish_artifact` `prepare_handoff` `list_handoffs` `accept_handoff` `list_milestones` `search_artifacts`
+`get_context` `ack_events` `wait_for_events` `list_tasks` `get_task` `create_task` `claim_task` `renew_task_lease` `release_task` `submit_task` `publish_decision` `publish_blocker` `list_artifacts` `get_artifact` `create_artifact` `update_artifact_draft` `publish_artifact` `prepare_handoff` `list_handoffs` `accept_handoff` `list_milestones` `search_artifacts`
+
+连接时 Connector 把协作规则作为 MCP server instructions 发给 Agent，并提供 `work` 提示词（Claude Code 中为 `/mcp__coagents__work`）。交换格式包括验收清单、逐条证据、阻塞类型、交接步骤和错误提示，详见 [Agent 协作协议](https://github.com/alonegg/coagents/blob/main/docs/AGENT_PROTOCOL.md)。
 
 Agent 不能验收任务、管理成员、上传文件或访问其他项目。同伴写入的内容作为不可信数据返回。跨设备交接时 Connector 只在你的工作副本中做只读 git 检查，不 fetch、不切换分支、不改文件。
 

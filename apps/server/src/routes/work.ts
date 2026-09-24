@@ -114,10 +114,10 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
     const { actor, access } = actorFor(ctx, c);
     const task = getTask(ctx, access.projectId, c.req.param("taskId"));
     const viewer = { userId: actor.userId, role: access.role };
-    const submissions = listSubmissions(ctx, task.id).map((s) => {
-      const sub = s as { artifact_version_ids: string[] };
-      return { ...sub, artifacts: describeVersions(ctx, access.projectId, viewer, sub.artifact_version_ids) };
-    });
+    const submissions = listSubmissions(ctx, task.id).map((s) => ({
+      ...s,
+      artifacts: describeVersions(ctx, access.projectId, viewer, s.artifact_version_ids),
+    }));
     return c.json({ ...task, submissions });
   });
 
@@ -184,12 +184,13 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
 
   r.post("/:id/blockers", async (c) => {
     const input = await parseBody(c, HttpBlockerInput);
+    const { task_id, lease_token, request_id: _r, ...blocker } = input;
     return write(c, input, "blocker", (actor, access) => {
-      if (input.task_id) {
-        return { status: 201, body: blockTask(ctx, access.projectId, actor, input.task_id, input.lease_token, input.body) };
+      if (task_id) {
+        return { status: 201, body: blockTask(ctx, access.projectId, actor, task_id, lease_token, blocker) };
       }
-      if (input.lease_token) throw invalid("lease_token needs task_id");
-      return { status: 201, body: { event_seq: publishGeneralBlocker(ctx, access.projectId, actor, input.body), task: null } };
+      if (lease_token) throw invalid("lease_token needs task_id");
+      return { status: 201, body: { event_seq: publishGeneralBlocker(ctx, access.projectId, actor, blocker), task: null } };
     });
   });
 

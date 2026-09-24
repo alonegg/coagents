@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BlockerKind, CriteriaInput, Criterion, EvidenceItems } from "./protocol.js";
 
 export const TaskStatus = z.enum(["todo", "in_progress", "blocked", "review", "done"]);
 export type TaskStatus = z.infer<typeof TaskStatus>;
@@ -66,6 +67,7 @@ export const CreateTaskInput = z
     title: Title,
     description: LongText.default(""),
     acceptance_criteria: LongText.default(""),
+    criteria: CriteriaInput.default([]),
     assignee_id: Id.nullable().default(null),
     request_id: RequestId,
   })
@@ -77,6 +79,8 @@ export const EditTaskInput = z
     title: Title.optional(),
     description: LongText.optional(),
     acceptance_criteria: LongText.optional(),
+    // The full checklist: items with an id keep it, items without get a new one, omitted ones are removed.
+    criteria: CriteriaInput.optional(),
     assignee_id: Id.nullable().optional(),
     request_id: RequestId,
   })
@@ -91,6 +95,7 @@ export const HttpSubmitInput = LeaseRef.extend({
   summary: Body,
   artifact_version_ids: z.array(Id).max(50).default([]),
   evidence: Body.optional(),
+  evidence_items: EvidenceItems.default([]),
 }).strict();
 
 export const ReviewInput = z
@@ -102,7 +107,15 @@ export const ReasonedReviewInput = z
   .strict();
 
 export const HttpBlockerInput = z
-  .object({ body: Body, task_id: Id.optional(), lease_token: LeaseToken.optional(), request_id: RequestId })
+  .object({
+    body: Body,
+    kind: BlockerKind.default("other"),
+    needs_from_user_id: Id.optional(),
+    depends_on_task_id: Id.optional(),
+    task_id: Id.optional(),
+    lease_token: LeaseToken.optional(),
+    request_id: RequestId,
+  })
   .strict();
 
 export const DecisionInput = z.object({ body: Body, supersedes_id: Id.optional(), request_id: RequestId }).strict();
@@ -123,6 +136,7 @@ export const TaskView = z.object({
   title: z.string(),
   description: z.string(),
   acceptance_criteria: z.string(),
+  criteria: z.array(Criterion),
   assignee_id: z.string().nullable(),
   status: TaskStatus,
   holder: HolderView.nullable(),
@@ -144,7 +158,13 @@ export const EventView = z.object({
   id: z.string(),
   project_id: z.string(),
   kind: z.string(),
-  actor: z.object({ user_id: z.string(), display_name: z.string(), client_id: z.string().nullable(), device_id: z.string().nullable() }),
+  actor: z.object({
+    user_id: z.string(),
+    display_name: z.string(),
+    kind: z.enum(["human", "agent"]),
+    client_id: z.string().nullable(),
+    device_id: z.string().nullable(),
+  }),
   subject_type: z.string(),
   subject_id: z.string(),
   summary: z.string(),

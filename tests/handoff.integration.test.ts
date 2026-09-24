@@ -58,13 +58,13 @@ it("refuses to take over until the commit is fetched, and never touches the rece
 
   const task = (await sender("create_task", { title: "登录" })).value;
   await sender("claim_task", { task_id: task.id });
-  const unpushed = await sender("prepare_handoff", { task_id: task.id, summary: "登录页完成", next_steps: "接 API" });
+  const unpushed = await sender("prepare_handoff", { task_id: task.id, summary: "登录页完成", next_steps: ["接 API"] });
   expect(unpushed.value.error.code).toBe("handoff_blocked");
   g(a, "push", "-q", "origin", "feat/login");
   writeFileSync(join(a, "scratch.txt"), "wip\n");
-  expect((await sender("prepare_handoff", { task_id: task.id, summary: "x", next_steps: "y" })).value.error.message).toMatch(/uncommitted/);
+  expect((await sender("prepare_handoff", { task_id: task.id, summary: "x", next_steps: ["y"] })).value.error.message).toMatch(/uncommitted/);
   execFileSync("rm", [join(a, "scratch.txt")]);
-  const h = (await sender("prepare_handoff", { task_id: task.id, summary: "登录页完成", next_steps: "接 API" })).value;
+  const h = (await sender("prepare_handoff", { task_id: task.id, summary: "登录页完成", next_steps: ["接 API"] })).value;
   expect(h.git).toMatchObject({ branch: "feat/login", dirty: false, pushed: true, commit: g(a, "rev-parse", "HEAD") });
 
   const headBefore = g(b, "rev-parse", "HEAD");
@@ -79,6 +79,6 @@ it("refuses to take over until the commit is fetched, and never touches the rece
   expect(ok.isError).toBe(false);
   expect(ok.value.local_check).toMatchObject({ has_commit: true, dirty: false });
   expect(g(b, "rev-parse", "HEAD")).toBe(headBefore);
-  expect((await receiver("list_tasks", { status: "in_progress" })).value.tasks[0].holder.kind).toBe("client");
+  expect((await receiver("list_tasks", { status: "in_progress" })).value.tasks[0].holder.kind).toBe("agent");
   expect((await receiver("submit_task", { task_id: task.id, summary: "接手后完成", evidence: "ok" })).value.task.status).toBe("review");
 });

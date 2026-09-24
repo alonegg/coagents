@@ -1,4 +1,4 @@
-import { AgentScope, DeviceCodeRequest, type AgentConnectionView, type DeviceCodeGrant, type DeviceTokenResult } from "@coagents/contract";
+import { AgentScope, DeviceCodeRequest, MIN_CONNECTOR_VERSION, PROTOCOL_VERSION, type AgentConnectionView, type DeviceCodeGrant, type DeviceTokenResult } from "@coagents/contract";
 import { Hono } from "hono";
 import { randomInt } from "node:crypto";
 import { z } from "zod";
@@ -181,6 +181,9 @@ export function agentRoutes(ctx: AppContext): Hono<Env> {
       scopes: agent.scopes,
       role: access.role,
       project,
+      protocol_version: PROTOCOL_VERSION,
+      min_connector_version: MIN_CONNECTOR_VERSION,
+      lease_minutes: ctx.config.leaseMinutes,
     });
   });
 

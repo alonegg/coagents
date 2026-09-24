@@ -383,6 +383,14 @@ const MIGRATIONS: readonly string[] = [
   CREATE UNIQUE INDEX one_pending_registration_per_username ON registrations(username) WHERE status = 'pending';
   CREATE INDEX registrations_by_status ON registrations(status, created_at);
   `,
+  `
+  -- Agent protocol 2: acceptance checklist, structured evidence, next-step lists.
+  ALTER TABLE tasks ADD COLUMN criteria TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE tasks ADD COLUMN criteria_next INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE task_submissions ADD COLUMN evidence_items TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE task_submissions ADD COLUMN criteria_snapshot TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE handoffs ADD COLUMN next_step_items TEXT NOT NULL DEFAULT '[]';
+  `,
 ];
 
 export function openDb(path: string): Db {

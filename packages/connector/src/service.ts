@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { USER_AGENT } from "./version.js";
 
 export class ServiceError extends Error {
   constructor(
@@ -20,7 +21,7 @@ export class ServiceClient {
   constructor(
     readonly server: string,
     private readonly token?: string,
-    private readonly userAgent = "coagents-connector/0.1",
+    private readonly userAgent = USER_AGENT,
   ) {}
 
   async call<T>(method: string, path: string, body?: Record<string, unknown>): Promise<T> {
@@ -49,7 +50,13 @@ export class ServiceClient {
         continue;
       }
       const text = await res.text();
-      const data = text ? (JSON.parse(text) as unknown) : null;
+      let data: unknown = null;
+      try {
+        data = text ? (JSON.parse(text) as unknown) : null;
+      } catch {
+        // A proxy or gateway page instead of the API's JSON.
+        throw new ServiceError(res.status, "bad_response", `Unexpected non-JSON response (HTTP ${res.status}) from ${this.server}`);
+      }
       if (!res.ok) {
         const e = (data as { error?: { code: string; message: string } } | null)?.error;
         throw new ServiceError(res.status, e?.code ?? "unknown", e?.message ?? `HTTP ${res.status}`);

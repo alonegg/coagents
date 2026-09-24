@@ -1,4 +1,4 @@
-import { normalizeRemote, type HandoffView, type ReceiverCheck, type SenderGit } from "@coagents/contract";
+import { authorKind, normalizeRemote, type HandoffView, type ReceiverCheck, type SenderGit } from "@coagents/contract";
 import { checkSubmissionVersions, describeVersions } from "./artifacts.js";
 import { nowIso, type Actor, type AppContext } from "./context.js";
 import { appendEvent } from "./events.js";
@@ -21,6 +21,7 @@ interface HandoffRow {
   target_user_id: string | null;
   summary: string;
   next_steps: string;
+  next_step_items: string;
   risks: string | null;
   git: string | null;
   artifact_version_ids: string;
@@ -40,10 +41,17 @@ function view(ctx: AppContext, r: HandoffRow, viewer: Viewer): HandoffView {
     task_id: r.task_id,
     task_title: r.task_title,
     state: r.state,
-    from: { user_id: r.from_user_id, display_name: r.from_name, holder_kind: r.from_holder_kind, device_id: r.from_device_id },
+    from: {
+      user_id: r.from_user_id,
+      display_name: r.from_name,
+      holder_kind: r.from_holder_kind,
+      author_kind: authorKind(r.from_holder_kind === "client" ? r.from_holder_id : null),
+      device_id: r.from_device_id,
+    },
     target_user_id: r.target_user_id,
     summary: r.summary,
     next_steps: r.next_steps,
+    next_step_items: JSON.parse(r.next_step_items) as string[],
     risks: r.risks,
     git: r.git ? (JSON.parse(r.git) as SenderGit) : null,
     artifacts: describeVersions(ctx, r.project_id, viewer, JSON.parse(r.artifact_version_ids) as string[]),
@@ -74,7 +82,8 @@ export function getHandoff(ctx: AppContext, projectId: string, viewer: Viewer, i
 export interface PrepareHandoff {
   lease_token?: string | undefined;
   summary: string;
-  next_steps: string;
+  next_steps?: string | undefined;
+  next_step_items?: string[] | undefined;
   risks?: string | undefined;
   target_user_id?: string | undefined;
   git?: SenderGit | undefined;
@@ -103,8 +112,8 @@ export function prepareHandoff(ctx: AppContext, projectId: string, actor: Actor,
   const id = newId("hof");
   ctx.db
     .prepare(
-      `INSERT INTO handoffs (id, project_id, task_id, state, from_holder_kind, from_holder_id, from_user_id, from_device_id, target_user_id, summary, next_steps, risks, git, artifact_version_ids, created_at)
-       VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO handoffs (id, project_id, task_id, state, from_holder_kind, from_holder_id, from_user_id, from_device_id, target_user_id, summary, next_steps, next_step_items, risks, git, artifact_version_ids, created_at)
+       VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -116,7 +125,9 @@ export function prepareHandoff(ctx: AppContext, projectId: string, actor: Actor,
       actor.deviceId,
       input.target_user_id ?? null,
       input.summary,
-      input.next_steps,
+      // A list is also kept as numbered prose, so every reader has next_steps.
+      input.next_steps ?? input.next_step_items!.map((s, i) => `${i + 1}. ${s}`).join("\n"),
+      JSON.stringify(input.next_step_items ?? []),
       input.risks ?? null,
       input.git ? JSON.stringify({ ...input.git, repo_identity: normalizeRemote(input.git.repo_identity) }) : null,
       JSON.stringify(input.artifact_version_ids),

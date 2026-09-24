@@ -1,4 +1,19 @@
-import { canClaim, nextStatus, type ClaimResult, type TaskAction, type TaskStatus, type TaskView } from "@coagents/contract";
+import {
+  assignCriterionIds,
+  authorKind,
+  canClaim,
+  criteriaCoverage,
+  nextStatus,
+  type BlockerKind,
+  type ClaimResult,
+  type Criterion,
+  type CriterionCoverage,
+  type CriterionInput,
+  type EvidenceItem,
+  type TaskAction,
+  type TaskStatus,
+  type TaskView,
+} from "@coagents/contract";
 import { nowIso, type Actor, type AppContext } from "./context.js";
 import { checkSubmissionVersions } from "./artifacts.js";
 import { appendEvent } from "./events.js";
@@ -11,6 +26,8 @@ interface TaskRow {
   title: string;
   description: string;
   acceptance_criteria: string;
+  criteria: string;
+  criteria_next: number;
   assignee_id: string | null;
   status: TaskStatus;
   holder_kind: "user" | "client" | null;
@@ -52,6 +69,7 @@ function toView(row: TaskRow, now: string): TaskView {
     title: row.title,
     description: row.description,
     acceptance_criteria: row.acceptance_criteria,
+    criteria: JSON.parse(row.criteria) as Criterion[],
     assignee_id: row.assignee_id,
     status: row.status,
     holder:
@@ -100,19 +118,27 @@ export interface CreateTask {
   title: string;
   description: string;
   acceptance_criteria: string;
+  criteria: CriterionInput[];
   assignee_id: string | null;
+}
+
+function numberCriteria(existing: Criterion[], input: CriterionInput[], next: number): { criteria: Criterion[]; next: number } {
+  const res = assignCriterionIds(existing, input, next);
+  if ("error" in res) throw invalid(res.error);
+  return res;
 }
 
 export function createTask(ctx: AppContext, projectId: string, actor: Actor, input: CreateTask): TaskView {
   assertMember(ctx, projectId, input.assignee_id);
   const id = newId("tsk");
   const now = nowIso(ctx);
+  const criteria = numberCriteria([], input.criteria, 1);
   ctx.db
     .prepare(
-      `INSERT INTO tasks (id, project_id, title, description, acceptance_criteria, assignee_id, status, version, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'todo', 1, ?, ?, ?)`,
+      `INSERT INTO tasks (id, project_id, title, description, acceptance_criteria, criteria, criteria_next, assignee_id, status, version, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'todo', 1, ?, ?, ?)`,
     )
-    .run(id, projectId, input.title, input.description, input.acceptance_criteria, input.assignee_id, actor.userId, now, now);
+    .run(id, projectId, input.title, input.description, input.acceptance_criteria, JSON.stringify(criteria.criteria), criteria.next, input.assignee_id, actor.userId, now, now);
   appendEvent(ctx, projectId, actor, {
     kind: "task.created",
     subjectType: "task",
@@ -134,20 +160,22 @@ export function editTask(
   const row = loadRow(ctx, projectId, taskId);
   if (row.version !== expectedVersion) throw versionConflict();
   if (patch.assignee_id !== undefined) assertMember(ctx, projectId, patch.assignee_id);
+  const numbered = patch.criteria === undefined ? null : numberCriteria(JSON.parse(row.criteria) as Criterion[], patch.criteria, row.criteria_next);
   const next = {
     title: patch.title ?? row.title,
     description: patch.description ?? row.description,
     acceptance_criteria: patch.acceptance_criteria ?? row.acceptance_criteria,
+    criteria: numbered ? JSON.stringify(numbered.criteria) : row.criteria,
     assignee_id: patch.assignee_id === undefined ? row.assignee_id : patch.assignee_id,
   };
   const changed = (Object.keys(next) as (keyof typeof next)[]).filter((k) => next[k] !== row[k]);
   if (changed.length === 0) return toView(row, nowIso(ctx));
   ctx.db
     .prepare(
-      `UPDATE tasks SET title = ?, description = ?, acceptance_criteria = ?, assignee_id = ?, version = version + 1, updated_at = ?
+      `UPDATE tasks SET title = ?, description = ?, acceptance_criteria = ?, criteria = ?, criteria_next = ?, assignee_id = ?, version = version + 1, updated_at = ?
        WHERE id = ? AND version = ?`,
     )
-    .run(next.title, next.description, next.acceptance_criteria, next.assignee_id, nowIso(ctx), taskId, expectedVersion);
+    .run(next.title, next.description, next.acceptance_criteria, next.criteria, numbered?.next ?? row.criteria_next, next.assignee_id, nowIso(ctx), taskId, expectedVersion);
   appendEvent(ctx, projectId, actor, {
     kind: next.assignee_id !== row.assignee_id ? "task.assigned" : "task.edited",
     subjectType: "task",
@@ -243,16 +271,44 @@ export function releaseTask(ctx: AppContext, projectId: string, actor: Actor, ta
   return getTask(ctx, projectId, taskId);
 }
 
-export function blockTask(ctx: AppContext, projectId: string, actor: Actor, taskId: string, leaseToken: string | undefined, body: string): { event_seq: number; task: TaskView } {
+export interface Blocker {
+  body: string;
+  kind: BlockerKind;
+  needs_from_user_id?: string | undefined;
+  depends_on_task_id?: string | undefined;
+}
+
+// Event payload of a blocker. The person asked for help must be a member; a dependency must be
+// another task of the same project.
+export function blockerData(ctx: AppContext, projectId: string, b: Blocker, ownTaskId?: string): Record<string, unknown> {
+  if (b.needs_from_user_id) {
+    const ok = ctx.db.prepare("SELECT 1 FROM memberships WHERE project_id = ? AND user_id = ?").get(projectId, b.needs_from_user_id);
+    if (!ok) throw invalid("needs_from_user_id must be a project member");
+  }
+  if (b.depends_on_task_id) {
+    if (b.depends_on_task_id === ownTaskId) throw invalid("A task cannot depend on itself");
+    const ok = ctx.db.prepare("SELECT 1 FROM tasks WHERE project_id = ? AND id = ?").get(projectId, b.depends_on_task_id);
+    if (!ok) throw invalid("depends_on_task_id must be a task in this project");
+  }
+  return {
+    body: b.body,
+    blocker_kind: b.kind,
+    ...(b.needs_from_user_id ? { needs_from_user_id: b.needs_from_user_id } : {}),
+    ...(b.depends_on_task_id ? { depends_on_task_id: b.depends_on_task_id } : {}),
+  };
+}
+
+export function blockTask(ctx: AppContext, projectId: string, actor: Actor, taskId: string, leaseToken: string | undefined, blocker: Blocker): { event_seq: number; task: TaskView } {
   const row = loadRow(ctx, projectId, taskId);
   requireHolder(ctx, row, actor, leaseToken);
+  const data = blockerData(ctx, projectId, blocker, taskId);
   transition(ctx, row, requireTransition("block", row), true);
   const seq = appendEvent(ctx, projectId, actor, {
     kind: "blocker.reported",
     subjectType: "task",
     subjectId: taskId,
     summary: `任务「${row.title}」受阻`,
-    data: { body },
+    data,
   });
   return { event_seq: seq, task: getTask(ctx, projectId, taskId) };
 }
@@ -262,28 +318,49 @@ export function submitTask(
   projectId: string,
   actor: Actor,
   taskId: string,
-  input: { lease_token?: string | undefined; summary: string; artifact_version_ids: string[]; evidence?: string | undefined },
-): { submission_id: string; task: TaskView } {
+  input: {
+    lease_token?: string | undefined;
+    summary: string;
+    artifact_version_ids: string[];
+    evidence?: string | undefined;
+    evidence_items: EvidenceItem[];
+  },
+): { submission_id: string; task: TaskView; coverage: CriterionCoverage[] } {
   const row = loadRow(ctx, projectId, taskId);
   requireHolder(ctx, row, actor, input.lease_token);
-  checkSubmissionVersions(ctx, projectId, input.artifact_version_ids);
-  if (!input.evidence && input.artifact_version_ids.length === 0) throw invalid("A submission needs evidence or artifact versions");
+  const criteria = JSON.parse(row.criteria) as Criterion[];
+  const known = new Set(criteria.map((c) => c.id));
+  for (const e of input.evidence_items) {
+    if (e.criterion_id && !known.has(e.criterion_id)) throw invalid(`Evidence points at unknown criterion ${e.criterion_id}`);
+  }
+  // Artifact evidence binds that version to the submission like artifact_version_ids does.
+  const versions = [...new Set([...input.artifact_version_ids, ...input.evidence_items.filter((e) => e.kind === "artifact").map((e) => e.ref!)])];
+  if (versions.length > 50) throw invalid("At most 50 artifact versions per submission");
+  checkSubmissionVersions(ctx, projectId, versions);
+  if (!input.evidence && versions.length === 0 && input.evidence_items.length === 0) {
+    throw invalid("A submission needs evidence, evidence_items or artifact versions");
+  }
   transition(ctx, row, requireTransition("submit", row), true);
   const id = newId("sub");
   ctx.db
     .prepare(
-      `INSERT INTO task_submissions (id, task_id, summary, artifact_version_ids, evidence, submitted_by_user, submitted_by_client, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO task_submissions (id, task_id, summary, artifact_version_ids, evidence, evidence_items, criteria_snapshot, submitted_by_user, submitted_by_client, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(id, taskId, input.summary, JSON.stringify(input.artifact_version_ids), input.evidence, actor.userId, actor.clientId, nowIso(ctx));
+    .run(id, taskId, input.summary, JSON.stringify(versions), input.evidence ?? null, JSON.stringify(input.evidence_items), row.criteria, actor.userId, actor.clientId, nowIso(ctx));
+  const coverage = criteriaCoverage(criteria, input.evidence_items);
   appendEvent(ctx, projectId, actor, {
     kind: "task.submitted",
     subjectType: "task",
     subjectId: taskId,
     summary: `提交任务「${row.title}」待验收`,
-    data: { submission_id: id, artifact_version_ids: input.artifact_version_ids },
+    data: {
+      submission_id: id,
+      artifact_version_ids: versions,
+      ...(coverage.length ? { criteria_uncovered: coverage.filter((c) => c.status !== "pass" && c.status !== "not_applicable").map((c) => c.criterion_id) } : {}),
+    },
   });
-  return { submission_id: id, task: getTask(ctx, projectId, taskId) };
+  return { submission_id: id, task: getTask(ctx, projectId, taskId), coverage };
 }
 
 type ReviewAction = "accept" | "reject" | "reopen" | "terminate";
@@ -311,10 +388,11 @@ export function reviewTask(
     to = requireTransition(action, row);
   }
   transition(ctx, row, to, true);
+  let sub: { id: string; submitted_by_user: string } | undefined;
   if (action === "accept" || action === "reject") {
-    const sub = ctx.db
-      .prepare("SELECT id FROM task_submissions WHERE task_id = ? AND outcome IS NULL ORDER BY created_at DESC LIMIT 1")
-      .get(taskId) as { id: string } | undefined;
+    sub = ctx.db
+      .prepare("SELECT id, submitted_by_user FROM task_submissions WHERE task_id = ? AND outcome IS NULL ORDER BY created_at DESC LIMIT 1")
+      .get(taskId) as typeof sub;
     if (sub) {
       ctx.db
         .prepare("UPDATE task_submissions SET outcome = ?, reviewed_by = ?, review_note = ?, reviewed_at = ? WHERE id = ?")
@@ -327,23 +405,60 @@ export function reviewTask(
     subjectType: "task",
     subjectId: taskId,
     summary: `${labels[action]}任务「${row.title}」`,
-    data: { ...(note ? { note } : {}), ...(action === "terminate" && row.holder_id ? { previous_holder: row.holder_id } : {}) },
+    data: {
+      ...(note ? { note } : {}),
+      ...(sub ? { submission_id: sub.id, submitted_by_user: sub.submitted_by_user } : {}),
+      ...(action === "terminate" && row.holder_id ? { previous_holder: row.holder_id } : {}),
+    },
   });
   return getTask(ctx, projectId, taskId);
 }
 
-export function listSubmissions(ctx: AppContext, taskId: string): unknown[] {
-  return ctx.db
-    .prepare(
-      `SELECT s.id, s.summary, s.artifact_version_ids, s.evidence, s.submitted_by_user, s.submitted_by_client, s.created_at,
-              s.outcome, s.reviewed_by, s.review_note, s.reviewed_at
-       FROM task_submissions s WHERE s.task_id = ? ORDER BY s.created_at DESC`,
-    )
-    .all(taskId)
-    .map((r) => {
-      const row = r as { artifact_version_ids: string };
-      return { ...row, artifact_version_ids: JSON.parse(row.artifact_version_ids) as string[] };
-    });
+export interface SubmissionView {
+  id: string;
+  summary: string;
+  artifact_version_ids: string[];
+  evidence: string | null;
+  evidence_items: EvidenceItem[];
+  // Coverage against the checklist as it was when submitted.
+  coverage: CriterionCoverage[];
+  submitted_by_user: string;
+  submitted_by_name: string;
+  submitted_by_client: string | null;
+  author_kind: "human" | "agent";
+  created_at: string;
+  outcome: "accepted" | "rejected" | null;
+  reviewed_by: string | null;
+  reviewed_by_name: string | null;
+  review_note: string | null;
+  reviewed_at: string | null;
+}
+
+export function listSubmissions(ctx: AppContext, taskId: string): SubmissionView[] {
+  return (
+    ctx.db
+      .prepare(
+        `SELECT s.id, s.summary, s.artifact_version_ids, s.evidence, s.evidence_items, s.criteria_snapshot,
+                s.submitted_by_user, su.display_name AS submitted_by_name, s.submitted_by_client, s.created_at,
+                s.outcome, s.reviewed_by, ru.display_name AS reviewed_by_name, s.review_note, s.reviewed_at
+         FROM task_submissions s JOIN users su ON su.id = s.submitted_by_user LEFT JOIN users ru ON ru.id = s.reviewed_by
+         WHERE s.task_id = ? ORDER BY s.created_at DESC`,
+      )
+      .all(taskId) as (Omit<SubmissionView, "artifact_version_ids" | "evidence_items" | "coverage" | "author_kind"> & {
+      artifact_version_ids: string;
+      evidence_items: string;
+      criteria_snapshot: string;
+    })[]
+  ).map(({ criteria_snapshot, ...row }) => {
+    const items = JSON.parse(row.evidence_items) as EvidenceItem[];
+    return {
+      ...row,
+      artifact_version_ids: JSON.parse(row.artifact_version_ids) as string[],
+      evidence_items: items,
+      coverage: criteriaCoverage(JSON.parse(criteria_snapshot) as Criterion[], items),
+      author_kind: authorKind(row.submitted_by_client),
+    };
+  });
 }
 
 // Ends active leases held by a revoked identity. The card stays where it is (PRD section 7);

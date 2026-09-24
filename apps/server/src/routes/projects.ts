@@ -26,6 +26,7 @@ function humanActor(auth: AuthState): Actor {
   return { kind: "user", userId: auth.user.id, displayName: auth.user.display_name, deviceId: auth.deviceId, clientId: null };
 }
 import { parseBody } from "../validate.js";
+import { actorFor } from "./work.js";
 import { projectSummary } from "../summaries.js";
 
 const PROJECT_COLUMNS = "p.id, p.name, p.description, p.lifecycle, p.timezone, p.due_at, m.role, p.created_at, p.updated_at";
@@ -147,9 +148,9 @@ export function projectRoutes(ctx: AppContext): Hono<Env> {
     return c.json(getProject(ctx, auth.user.id, c.req.param("id")));
   });
 
+  // Agents read the member list too, to address handoffs and blockers to a person.
   r.get("/:id/members", (c) => {
-    const auth = requireAuth(c);
-    const access = projectAccess(ctx, auth.user.id, c.req.param("id"));
+    const { access } = actorFor(ctx, c);
     const members = ctx.db
       .prepare(
         `SELECT m.user_id, u.username, u.display_name, m.role, m.joined_at

@@ -14,6 +14,7 @@ import { login } from "./login.js";
 import { ServiceClient } from "./service.js";
 import { EventStream } from "./sse.js";
 import { CONNECTOR_VERSION, createConnectorServer, type ConnectorState } from "./server.js";
+import { USER_AGENT } from "./version.js";
 import { coagentsHome, deleteCredential, forgetClientLeases, loadCredential, pruneHome } from "./store.js";
 import { rmdirSync, rmSync } from "node:fs";
 
@@ -94,13 +95,16 @@ async function main(): Promise<void> {
         // Keep a live event stream while the client runs, so the server records delivery to this device.
         // Delivered is not read: the agent still reads and acknowledges through get_context / ack_events.
         let detail: string | undefined;
+        const waiters = new Set<() => void>();
         const svc = new ServiceClient(s.credential.server, s.credential.agent_token);
         const start = await svc.call<{ last_seen_seq: number }>("GET", `/projects/${s.credential.project_id}/cursor`).catch(() => ({ last_seen_seq: 0 }));
         const stream = new EventStream({
           url: (c) => `${s.credential.server}/v1/projects/${s.credential.project_id}/stream?cursor=${c}`,
-          headers: { authorization: `Bearer ${s.credential.agent_token}`, "user-agent": "coagents-connector/0.1" },
+          headers: { authorization: `Bearer ${s.credential.agent_token}`, "user-agent": USER_AGENT },
           cursor: start.last_seen_seq,
-          onEvent: () => {},
+          onEvent: () => {
+            for (const w of [...waiters]) w();
+          },
           onState: (st, d) => {
             detail = d;
             if (st === "revoked") say(`coagents: live stream ended: access revoked (${d ?? ""})`);
@@ -108,6 +112,18 @@ async function main(): Promise<void> {
         });
         void stream.run();
         s.stream = () => ({ state: stream.state, last_delivered_seq: stream.cursor, ...(detail ? { detail } : {}) });
+        // wait_for_events sleeps on the live stream; while it is down, it falls back to short polls.
+        s.waitForEvent = (afterSeq, ms) =>
+          new Promise<void>((done) => {
+            if (stream.cursor > afterSeq) return done();
+            const wake = () => {
+              clearTimeout(timer);
+              waiters.delete(wake);
+              done();
+            };
+            const timer = setTimeout(wake, stream.state === "live" ? ms : Math.min(ms, 3000));
+            waiters.add(wake);
+          });
       }
       await createConnectorServer(s).connect(new StdioServerTransport());
       return;
@@ -181,7 +197,7 @@ async function main(): Promise<void> {
       if (!name) throw new Error("tool needs a tool name");
       const [a, b] = InMemoryTransport.createLinkedPair();
       await createConnectorServer(state(dir)).connect(b);
-      const client = new Client({ name: "coagents-cli", version: "0.1.0" });
+      const client = new Client({ name: "coagents-cli", version: CONNECTOR_VERSION });
       await client.connect(a);
       const res = (await client.callTool({ name, arguments: json ? (JSON.parse(json) as Record<string, unknown>) : {} })) as { isError?: boolean; content: { text: string }[] };
       process.stdout.write(`${res.content[0]?.text ?? ""}\n`);

@@ -1,6 +1,6 @@
 import type { EventPage, EventView, ProjectView, SessionView } from "@coagents/contract";
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, formatTime } from "../api.js";
+import { api, ApiError, BLOCKER_KIND_LABEL, formatTime } from "../api.js";
 import { LIVE_LABEL, useEventStream } from "../stream.js";
 
 // Peer text is untrusted: rendered as plain text only, never as HTML or commands.
@@ -51,6 +51,10 @@ export function ActivityTab({ project, session }: { project: ProjectView; sessio
           <li key={e.id}>
             <span className="muted">{formatTime(e.created_at, tz)}</span> <strong>{e.actor.display_name}</strong>
             {e.actor.client_id && <span className="badge">Agent</span>} {e.summary}
+            {typeof e.data.blocker_kind === "string" && <span className="badge">{BLOCKER_KIND_LABEL[e.data.blocker_kind] ?? e.data.blocker_kind}</span>}
+            {Array.isArray(e.data.criteria_uncovered) && e.data.criteria_uncovered.length > 0 && (
+              <span className="badge warn">未通过或缺证据：{(e.data.criteria_uncovered as string[]).join("、")}</span>
+            )}
             {e.subject_type === "task" && <> · <a href={`#/projects/${project.id}/tasks/${e.subject_id}`}>查看任务</a></>}
             {typeof e.data.body === "string" && <p className="pre quote">{e.data.body}</p>}
             {typeof e.data.note === "string" && <p className="pre quote">{e.data.note}</p>}

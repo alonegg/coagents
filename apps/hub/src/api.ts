@@ -66,6 +66,26 @@ export function requestId(): string {
   return `hub-${crypto.randomUUID()}`;
 }
 
+export const COVERAGE_LABEL: Record<string, string> = {
+  pass: "通过",
+  fail: "未通过",
+  partial: "部分通过",
+  not_applicable: "不适用",
+  unverified: "有证据未判定",
+  missing: "无证据",
+};
+
+export const EVIDENCE_KIND_LABEL: Record<string, string> = { test: "测试", commit: "提交", artifact: "成果", link: "链接", review: "核查", note: "说明" };
+
+export const BLOCKER_KIND_LABEL: Record<string, string> = {
+  needs_decision: "需要决策",
+  needs_access: "需要权限",
+  needs_input: "需要信息",
+  dependency: "依赖其他任务",
+  external: "外部原因",
+  other: "其他",
+};
+
 export const STATUS_LABEL: Record<string, string> = {
   todo: "待办",
   in_progress: "进行中",

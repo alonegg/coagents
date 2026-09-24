@@ -20,8 +20,15 @@ export function notifyForEvent(
       if (typeof data.assignee_id === "string") recipients.add(data.assignee_id);
       break;
     case "task.submitted":
+      for (const id of managers()) recipients.add(id);
+      break;
     case "blocker.reported":
       for (const id of managers()) recipients.add(id);
+      if (typeof data.needs_from_user_id === "string") recipients.add(data.needs_from_user_id);
+      break;
+    // The submitter learns why their work came back (an agent reads it through get_task).
+    case "task.rejected":
+      if (typeof data.submitted_by_user === "string") recipients.add(data.submitted_by_user);
       break;
     case "handoff.prepared":
     case "member.role_changed":
