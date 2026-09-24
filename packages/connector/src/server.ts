@@ -353,13 +353,22 @@ export function createConnectorServer(state?: ConnectorState): McpServer {
     "get_task",
     READ,
     "Read one task in full: description, acceptance criteria with ids, holder and lease, and every submission with its evidence, " +
-      "criteria coverage and the reviewer's note (why it was accepted or rejected).",
+      "criteria coverage and the reviewer's note (why it was accepted or rejected). When the project uses AI assistance, " +
+      "ai_briefing summarizes the task's history; it is an unconfirmed aid, so check it against the task itself.",
     { task_id: TaskIdArg },
     async (args, svc, cred) => {
       const t = await svc.call<TaskView & { submissions: unknown[] }>("GET", `${p(cred)}/tasks/${args.task_id}`);
+      // Older services have no AI routes; the briefing is optional.
+      const ai = await svc
+        .call<{ briefing: { status: string; output: unknown; current: boolean; updated_at: string } | null }>("GET", `${p(cred)}/tasks/${args.task_id}/ai`)
+        .catch(() => null);
+      const b = ai?.briefing;
       return {
         notice: UNTRUSTED_NOTICE,
         task: { ...t, holder: t.holder ? { ...t.holder, is_you: t.holder.kind === "client" && t.holder.id === cred.client_id } : null },
+        ...(b?.status === "ready"
+          ? { ai_briefing: { note: "AI-generated, not confirmed by a person; may be wrong or outdated.", up_to_date: b.current, generated_at: b.updated_at, ...(b.output as object) } }
+          : {}),
       };
     },
   );

@@ -1,6 +1,7 @@
 import type { ArtifactView, MilestoneView, ProjectView, SessionView, TaskView } from "@coagents/contract";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, formatTime, requestId, STATUS_LABEL } from "../api.js";
+import { ProjectDigest } from "../Ai.js";
 import { useEventStream } from "../stream.js";
 
 export function OverviewTab({ project, session, onChanged }: { project: ProjectView; session: SessionView; onChanged: () => void }) {
@@ -68,6 +69,8 @@ export function OverviewTab({ project, session, onChanged }: { project: ProjectV
           )}
         </p>
       </section>
+
+      <ProjectDigest project={project} tz={tz} />
 
       <div className="grid2">
         <section className="panel">

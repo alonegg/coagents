@@ -1,7 +1,16 @@
 import type { RegistrationMode } from "@coagents/contract";
 import type { AppContext } from "./context.js";
 
-const DEFAULTS = { registration_mode: "approval", site_name: "CoAgents", announcement: "" } as const;
+const DEFAULTS = {
+  registration_mode: "approval",
+  site_name: "CoAgents",
+  announcement: "",
+  ai_enabled: "0",
+  ai_base_url: "",
+  ai_model: "",
+  ai_api_key: "",
+  ai_daily_limit: "200",
+} as const;
 type Key = keyof typeof DEFAULTS;
 
 export function getSetting(ctx: AppContext, key: Key): string {

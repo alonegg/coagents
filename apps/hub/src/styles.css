@@ -91,3 +91,7 @@ select[multiple] { min-height: 90px; }
 .cov-not_applicable { color: var(--muted); }
 .criteria-edit { display: flex; gap: 6px; align-items: center; }
 .criteria-edit input { flex: 1; }
+
+.ai { border-left: 3px solid var(--accent); padding-left: 12px; }
+.ai-block { margin: 8px 0 12px; }
+.ai-block > strong { display: block; margin-bottom: 4px; }

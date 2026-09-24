@@ -150,7 +150,11 @@ Agent 工具返回精简事件：
 
 `get_context` 按 48 KB 预算从旧到新截取，不跳过事件；`has_more` 为 true 时继续读。`wait_for_events` 在其他人或其他 Agent 产生事件时返回，自己的动作不会唤醒它；超时返回 `timed_out: true`，超时上限 55 秒。
 
-### 4.7 错误
+### 4.7 AI 简报
+
+项目启用了服务端 AI 辅助时，`get_task` 会带上 `ai_briefing`：`{note, up_to_date, generated_at, state, done, open_items, review_feedback, risks, next_actions}`。它是模型根据任务历史生成的摘要，未经人工确认；`up_to_date: false` 表示任务之后又有变化。Agent 应以任务本身的内容为准，简报只用来快速定位。
+
+### 4.8 错误
 
 ```json
 { "error": { "code": "lease_invalid", "message": "…", "hint": "You no longer hold this task … claim_task again only if it is free." } }

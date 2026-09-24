@@ -391,6 +391,41 @@ const MIGRATIONS: readonly string[] = [
   ALTER TABLE task_submissions ADD COLUMN criteria_snapshot TEXT NOT NULL DEFAULT '[]';
   ALTER TABLE handoffs ADD COLUMN next_step_items TEXT NOT NULL DEFAULT '[]';
   `,
+  `
+  -- Advisory model output (pre-review, briefings, digests) and a ledger of every model call.
+  ALTER TABLE projects ADD COLUMN ai_enabled INTEGER NOT NULL DEFAULT 1;
+  CREATE TABLE ai_outputs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    kind TEXT NOT NULL CHECK (kind IN ('prereview', 'briefing', 'digest')),
+    subject_id TEXT NOT NULL,
+    input_key TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'ready', 'failed', 'skipped')),
+    output TEXT,
+    error TEXT,
+    model TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (kind, subject_id, input_key)
+  ) STRICT;
+  CREATE INDEX ai_outputs_by_subject ON ai_outputs(kind, subject_id, created_at);
+  CREATE TABLE ai_calls (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    kind TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    requested_by TEXT,
+    model TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('ok', 'failed')),
+    input_chars INTEGER NOT NULL,
+    prompt_tokens INTEGER,
+    completion_tokens INTEGER,
+    latency_ms INTEGER,
+    error TEXT,
+    created_at TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX ai_calls_by_project ON ai_calls(project_id, created_at);
+  `,
 ];
 
 export function openDb(path: string): Db {

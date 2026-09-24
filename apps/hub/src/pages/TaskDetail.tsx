@@ -1,6 +1,7 @@
 import type { CriterionCoverage, EvidenceItem, ProjectView, SessionView, TaskView } from "@coagents/contract";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, BLOCKER_KIND_LABEL, COVERAGE_LABEL, EVIDENCE_KIND_LABEL, formatTime, requestId, STATUS_LABEL } from "../api.js";
+import { TaskAi } from "../Ai.js";
 import { canWrite } from "./Board.js";
 
 interface Submission {
@@ -60,6 +61,7 @@ export function TaskDetail({
   const [checks, setChecks] = useState<Record<string, HumanCheck>>({});
   const [blockerKind, setBlockerKind] = useState("other");
   const [editing, setEditing] = useState<{ id?: string; text: string }[] | null>(null);
+  const [aiRefresh, setAiRefresh] = useState(0);
 
   const base = `/projects/${project.id}/tasks/${taskId}`;
   const load = useCallback(() => {
@@ -89,6 +91,7 @@ export function TaskDetail({
       setChecks({});
       setEditing(null);
       load();
+      setAiRefresh((n) => n + 1);
       await onChanged();
     } catch (e) {
       if (e instanceof ApiError && e.code === "version_conflict") setError("任务已被他人修改，已刷新；请确认后重新操作。你的输入已保留。");
@@ -233,6 +236,8 @@ export function TaskDetail({
           </div>
         </div>
       )}
+
+      <TaskAi projectId={project.id} taskId={task.id} tz={tz} reviewer={reviewer && task.status === "review"} writable={writable} refresh={aiRefresh} onUseNote={setText} />
 
       {handoffs.length > 0 && (
         <>

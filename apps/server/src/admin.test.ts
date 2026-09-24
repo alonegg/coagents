@@ -139,6 +139,6 @@ describe("administration", () => {
     const admin = await seedUser(env, "root", true);
     await applyAs(env, "waiting");
     const o = (await admin.json("GET", "/v1/admin/overview")).body;
-    expect(o).toMatchObject({ schema_version: 11, pending_registrations: 1, users: { active: 1 }, open_streams: 0 });
+    expect(o).toMatchObject({ schema_version: 12, pending_registrations: 1, users: { active: 1 }, open_streams: 0 });
   });
 });

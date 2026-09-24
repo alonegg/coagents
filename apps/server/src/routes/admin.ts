@@ -11,6 +11,8 @@ import type { AppContext } from "../context.js";
 import { schemaVersion } from "../db.js";
 import { appendEvent } from "../events.js";
 import { invalid, notAllowed, notFound } from "../http-error.js";
+import { AiSettingsInput } from "@coagents/contract";
+import { aiEndpoint, aiSettings, testConnection } from "../ai.js";
 import { settings, setSetting } from "../instance.js";
 import { decide, listRegistrations } from "../registrations.js";
 import { openStreamCount } from "../stream.js";
@@ -215,6 +217,64 @@ export function adminRoutes(ctx: AppContext): Hono<Env> {
     for (const [k, v] of Object.entries(input)) if (v !== undefined) setSetting(ctx, k as "registration_mode", v);
     audit(ctx, { projectId: null, actorUserId: auth.user.id, action: "instance.settings", objectType: "instance", objectId: "settings", detail: Object.fromEntries(Object.entries(input).map(([k, v]) => [k, k === "announcement" ? `${String(v).length} chars` : String(v)])) });
     return c.json(settings(ctx));
+  });
+
+  // Server-side model assistance. The API key is write-only; responses show only its last four characters.
+  r.get("/ai", (c) => {
+    requireMaintainer(c);
+    return c.json(aiSettings(ctx));
+  });
+
+  r.put("/ai", async (c) => {
+    const auth = requireMaintainer(c);
+    const input = await parseBody(c, AiSettingsInput);
+    if (input.enabled !== undefined) setSetting(ctx, "ai_enabled", input.enabled ? "1" : "0");
+    if (input.base_url !== undefined) setSetting(ctx, "ai_base_url", input.base_url.replace(/\/+$/, ""));
+    if (input.model !== undefined) setSetting(ctx, "ai_model", input.model);
+    if (input.api_key !== undefined) setSetting(ctx, "ai_api_key", input.api_key);
+    if (input.clear_api_key) setSetting(ctx, "ai_api_key", "");
+    if (input.daily_limit !== undefined) setSetting(ctx, "ai_daily_limit", String(input.daily_limit));
+    audit(ctx, {
+      projectId: null,
+      actorUserId: auth.user.id,
+      action: "instance.ai",
+      objectType: "instance",
+      objectId: "ai",
+      detail: {
+        ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+        ...(input.base_url !== undefined ? { base_url: input.base_url } : {}),
+        ...(input.model !== undefined ? { model: input.model } : {}),
+        ...(input.api_key !== undefined ? { api_key: "replaced" } : {}),
+        ...(input.clear_api_key ? { api_key: "cleared" } : {}),
+        ...(input.daily_limit !== undefined ? { daily_limit: input.daily_limit } : {}),
+      },
+    });
+    return c.json(aiSettings(ctx));
+  });
+
+  r.post("/ai/test", async (c) => {
+    const auth = requireMaintainer(c);
+    const endpoint = aiEndpoint(ctx);
+    if (!endpoint) throw invalid("Set the base URL, model and API key first");
+    const result = await testConnection(endpoint);
+    audit(ctx, { projectId: null, actorUserId: auth.user.id, action: "instance.ai_test", objectType: "instance", objectId: "ai", detail: { ok: result.ok } });
+    return c.json(result);
+  });
+
+  // Model usage per project over the last 7 days: counts, failures and tokens. No content.
+  r.get("/ai/usage", (c) => {
+    requireMaintainer(c);
+    const since = new Date(ctx.clock().getTime() - 7 * 24 * 3600_000).toISOString();
+    const rows = ctx.db
+      .prepare(
+        `SELECT c.project_id, p.name AS project_name, c.kind, COUNT(*) AS calls, SUM(c.status = 'failed') AS failed,
+                COALESCE(SUM(c.prompt_tokens), 0) AS prompt_tokens, COALESCE(SUM(c.completion_tokens), 0) AS completion_tokens,
+                CAST(AVG(c.latency_ms) AS INTEGER) AS avg_latency_ms, MAX(c.created_at) AS last_at
+         FROM ai_calls c JOIN projects p ON p.id = c.project_id WHERE c.created_at > ? GROUP BY c.project_id, c.kind ORDER BY last_at DESC`,
+      )
+      .all(since);
+    const errors = ctx.db.prepare("SELECT kind, error, created_at FROM ai_calls WHERE status = 'failed' AND created_at > ? ORDER BY created_at DESC LIMIT 10").all(since);
+    return c.json({ usage: rows, recent_errors: errors });
   });
 
   // Instance-level audit: accounts, registrations, sign-in failures and settings (not project records).

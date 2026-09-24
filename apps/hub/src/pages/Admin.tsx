@@ -1,9 +1,10 @@
 import type { SessionView } from "@coagents/contract";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { AdminAi } from "../Ai.js";
 import { api, ApiError, formatTime } from "../api.js";
 import type { AdminTab } from "../router.js";
 
-const TABS: [AdminTab, string][] = [["overview", "运行状态"], ["registrations", "注册审批"], ["users", "用户"], ["projects", "项目"], ["settings", "实例设置"], ["audit", "审计"]];
+const TABS: [AdminTab, string][] = [["overview", "运行状态"], ["registrations", "注册审批"], ["users", "用户"], ["projects", "项目"], ["settings", "实例设置"], ["ai", "AI 辅助"], ["audit", "审计"]];
 
 function useLoad<T>(path: string): [T | null, string | null, () => void] {
   const [data, setData] = useState<T | null>(null);
@@ -38,6 +39,7 @@ export function AdminPage({ tab, session }: { tab: AdminTab; session: SessionVie
       {tab === "users" && <Users tz={session.user.timezone} me={session.user.id} />}
       {tab === "projects" && <Projects tz={session.user.timezone} />}
       {tab === "settings" && <Settings />}
+      {tab === "ai" && <AdminAi tz={session.user.timezone} />}
       {tab === "audit" && <Audit tz={session.user.timezone} />}
     </>
   );
@@ -318,6 +320,8 @@ const ACTIONS: Record<string, string> = {
   "user.register": "通过邀请注册",
   "device.revoke": "撤销设备",
   "instance.settings": "修改实例设置",
+  "instance.ai": "修改 AI 辅助设置",
+  "instance.ai_test": "测试 AI 连接",
   "ownership.recover": "协助转移所有权",
 };
 

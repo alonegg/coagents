@@ -1,4 +1,5 @@
 import type { ProjectView, SessionView } from "@coagents/contract";
+import { ProjectAiSwitch } from "../Ai.js";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, formatTime } from "../api.js";
 import { go } from "../router.js";
@@ -15,6 +16,7 @@ interface AuditRecord {
 
 const ACTION_LABEL: Record<string, string> = {
   "project.create": "创建项目",
+  "project.ai": "切换 AI 辅助",
   "project.archive": "归档项目",
   "project.restore": "恢复项目",
   "project.delete": "删除项目",
@@ -59,6 +61,7 @@ export function SettingsTab({ project, session, onChanged }: { project: ProjectV
   return (
     <>
       {error && <p className="error">{error}</p>}
+      <ProjectAiSwitch project={project} />
       <section className="panel">
         <h3 className="first">归档</h3>
         {project.lifecycle === "active" ? (

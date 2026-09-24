@@ -15,6 +15,7 @@ import {
   type TaskView,
 } from "@coagents/contract";
 import { nowIso, type Actor, type AppContext } from "./context.js";
+import { queuePrereview } from "./ai.js";
 import { checkSubmissionVersions } from "./artifacts.js";
 import { appendEvent } from "./events.js";
 import { HttpError, invalid, notFound } from "./http-error.js";
@@ -386,6 +387,7 @@ export function submitTask(
       ...(coverage.length ? { criteria_uncovered: coverage.filter((c) => c.status !== "pass" && c.status !== "not_applicable").map((c) => c.criterion_id) } : {}),
     },
   });
+  queuePrereview(ctx, projectId, taskId, id, actor.userId);
   return { submission_id: id, task: getTask(ctx, projectId, taskId), coverage };
 }
 

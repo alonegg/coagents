@@ -15,8 +15,8 @@ export type Route =
   | { name: "account" }
   | { name: "admin"; tab: AdminTab };
 
-export type AdminTab = "overview" | "registrations" | "users" | "projects" | "settings" | "audit";
-const ADMIN_TABS: readonly AdminTab[] = ["overview", "registrations", "users", "projects", "settings", "audit"];
+export type AdminTab = "overview" | "registrations" | "users" | "projects" | "settings" | "ai" | "audit";
+const ADMIN_TABS: readonly AdminTab[] = ["overview", "registrations", "users", "projects", "settings", "ai", "audit"];
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
