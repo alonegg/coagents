@@ -29,6 +29,7 @@ const ANSWERS: Record<string, unknown> = {
     suggested_review_note: "c2 缺少证据，建议退回。",
   },
   briefing: { state: "待验收", done: ["实现了登录"], open_items: ["c2 未覆盖"], review_feedback: [], risks: [], next_actions: ["补 401 测试"] },
+  criteria_draft: { criteria: [{ text: "POST /login 返回 200", why: "主路径" }, { text: "错误密码返回 401", why: "失败路径" }], questions: ["会话有效期多久？"] },
   digest: { headline: "今天完成一次提交", highlights: ["登录接口提交待验收"], needs_attention: ["等待 q-owner 验收"], decisions: [], conflicts: [] },
 };
 
@@ -42,7 +43,13 @@ beforeAll(async () => {
       const body = JSON.parse(raw);
       seen.push({ auth: req.headers.authorization, body });
       const name = body.response_format?.json_schema?.name as string;
-      const content = mode === "garbage" ? "not json at all" : JSON.stringify(ANSWERS[name]);
+      // Routing names the first candidate in the prompt plus an invented id, which must be dropped.
+      const firstCandidate = /"user_id": "(usr_[^"]+)"/.exec(body.messages?.[1]?.content ?? "")?.[1];
+      const answer =
+        name === "routing"
+          ? { candidates: [{ user_id: firstCandidate, fit: "high", reason: "做过类似任务" }, { user_id: "usr_invented", fit: "medium", reason: "编造" }], note: "" }
+          : ANSWERS[name];
+      const content = mode === "garbage" ? "not json at all" : JSON.stringify(answer);
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ model: "fake-model", choices: [{ message: { content } }], usage: { prompt_tokens: 100, completion_tokens: 20 } }));
     });
@@ -175,5 +182,56 @@ it("hands the briefing to agents through get_task, marked as unconfirmed", async
   const r = (await mcp.callTool({ name: "get_task", arguments: { task_id: task.id } })) as { content: { text: string }[] };
   const v = JSON.parse(r.content[0]!.text);
   expect(v.ai_briefing).toMatchObject({ note: expect.stringContaining("not confirmed"), up_to_date: true, state: "待验收", next_actions: ["补 401 测试"] });
+  await mcp.close();
+});
+
+it("drafts checklists, routes to real members only, and asks people for help", async () => {
+  const admin = await signIn(srv.base, srv.ctx, "ai-admin", false);
+  const owner = await signIn(srv.base, srv.ctx, "ai-owner4");
+  const dev = await signIn(srv.base, srv.ctx, "ai-dev4");
+  const viewer = await signIn(srv.base, srv.ctx, "ai-viewer4");
+  await admin.call("PUT", "/admin/ai", { enabled: true, daily_limit: 200 });
+  const pid = (await owner.call("POST", "/projects", { name: "ai-4" })).body.id;
+  for (const [who, role] of [[dev, "contributor"], [viewer, "viewer"]] as const) {
+    const inv = (await owner.call("POST", `/projects/${pid}/invitations`, { role })).body.token;
+    await who.call("POST", `/invitations/${inv}/accept`);
+  }
+  const ownerId = (await owner.call("GET", "/session")).body.user.id;
+  const devId = (await dev.call("GET", "/session")).body.user.id;
+  const viewerId = (await viewer.call("GET", "/session")).body.user.id;
+  const task = (await owner.call("POST", `/projects/${pid}/tasks`, { title: "登录接口", description: "实现 /login", request_id: "req-ai4-task" })).body;
+
+  await owner.call("POST", `/projects/${pid}/tasks/${task.id}/ai/criteria`);
+  await owner.call("POST", `/projects/${pid}/tasks/${task.id}/ai/routing`, { purpose: "assign" });
+  await settleAiJobs();
+  const ai = (await owner.call("GET", `/projects/${pid}/tasks/${task.id}/ai`)).body;
+  expect(ai.criteria_draft).toMatchObject({ status: "ready", current: true, output: { questions: ["会话有效期多久？"] } });
+  const assign = ai.routing.assign.output;
+  expect(assign.candidates.map((c: any) => c.user_id)).not.toContain("usr_invented");
+  expect(assign.candidates).toHaveLength(1);
+  expect(assign.candidates[0]).toMatchObject({ name: expect.any(String), role: expect.stringMatching(/owner|contributor/) });
+  const routingPrompt = seen.filter((x) => x.body.response_format.json_schema.name === "routing").at(-1)!.body.messages[1].content as string;
+  expect(routingPrompt).not.toContain(viewerId); // viewers cannot be assigned work
+  expect(routingPrompt).toContain(devId);
+
+  // Asking for help notifies that person; not yourself, not outsiders.
+  expect((await owner.call("POST", `/projects/${pid}/tasks/${task.id}/help-requests`, { user_id: ownerId, note: "x", request_id: "req-help-self" })).status).toBe(400);
+  expect((await owner.call("POST", `/projects/${pid}/tasks/${task.id}/help-requests`, { user_id: "usr_nobody", note: "x", request_id: "req-help-none" })).status).toBe(400);
+  expect((await owner.call("POST", `/projects/${pid}/tasks/${task.id}/help-requests`, { user_id: devId, note: "看下会话方案", request_id: "req-help-dev" })).status).toBe(201);
+  expect((await dev.call("GET", "/notifications")).body.notifications.map((n: any) => n.kind)).toContain("task.help_requested");
+
+  // Agents get the same through MCP.
+  const grant = (await (await fetch(`${srv.base}/v1/device-codes`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ project_id: pid, client_label: "t", scopes: ["read", "write"] }) })).json()) as any;
+  await dev.call("POST", `/device-codes/${grant.user_code}/approve`);
+  const tok = (await (await fetch(`${srv.base}/v1/device-codes/token`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ device_code: grant.device_code }) })).json()) as any;
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await createConnectorServer({ ok: true, credential: { server: srv.base, project_id: pid, client_id: tok.client_id, device_id: tok.device_id, scopes: tok.scopes, agent_token: tok.agent_token, created_at: "" }, home: mkdtempSync(join(tmpdir(), "h-")) }).connect(b);
+  const mcp = new Client({ name: "t", version: "0" });
+  await mcp.connect(a);
+  const call = async (name: string, args: Record<string, unknown>) => JSON.parse(((await mcp.callTool({ name, arguments: args })) as { content: { text: string }[] }).content[0]!.text);
+  const handoff = await call("suggest_people", { task_id: task.id, purpose: "handoff" });
+  expect(handoff).toMatchObject({ status: "ready", purpose: "handoff", note: expect.anything() });
+  expect(handoff.candidates.map((c: any) => c.user_id)).not.toContain(devId); // not back to the requester
+  expect((await call("request_help", { task_id: task.id, user_id: ownerId, note: "需要决定会话有效期" })).event_seq).toEqual(expect.any(Number));
   await mcp.close();
 });

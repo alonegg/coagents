@@ -30,7 +30,7 @@ coagents status
 
 ## Agent 可用的工具
 
-`get_context` `ack_events` `wait_for_events` `list_tasks` `get_task` `create_task` `claim_task` `renew_task_lease` `release_task` `submit_task` `publish_decision` `publish_blocker` `list_artifacts` `get_artifact` `create_artifact` `update_artifact_draft` `publish_artifact` `prepare_handoff` `list_handoffs` `accept_handoff` `list_milestones` `search_artifacts`
+`get_context` `ack_events` `wait_for_events` `list_tasks` `get_task` `create_task` `claim_task` `renew_task_lease` `release_task` `submit_task` `publish_decision` `publish_blocker` `request_help` `suggest_people` `list_artifacts` `get_artifact` `create_artifact` `update_artifact_draft` `publish_artifact` `prepare_handoff` `list_handoffs` `accept_handoff` `list_milestones` `search_artifacts`
 
 连接时 Connector 把协作规则作为 MCP server instructions 发给 Agent，并提供 `work` 提示词（Claude Code 中为 `/mcp__coagents__work`）。交换格式包括验收清单、逐条证据、阻塞类型、交接步骤和错误提示，详见 [Agent 协作协议](https://github.com/alonegg/coagents/blob/main/docs/AGENT_PROTOCOL.md)。
 

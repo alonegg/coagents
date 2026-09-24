@@ -26,6 +26,8 @@
 | `create_artifact` / `update_artifact_draft` / `publish_artifact` | 标题、正文或链接、`expected_revision` | 草稿 / 不可变版本 | 版本冲突、无权限 |
 | `prepare_handoff` | `task_id`, `summary`, `next_steps[]`, `risks?`, `target_user_id?`, `include_git?`, `artifact_version_ids?` | 待接收交接 | 未提交或未推送的代码、租约无效 |
 | `list_handoffs` / `accept_handoff` | `state?`, `task_id?` / `handoff_id` | 交接列表 / 新租约与本地检查结果 | 缺 commit、仓库不符、租约竞争 |
+| `request_help` | `task_id`, `user_id`, `note`, `request_id?` | 事件序号；对方收到通知 | 对象不是成员、不能请求自己 |
+| `suggest_people` | `task_id`, `purpose`（assign/unblock/handoff） | 最多 3 位候选成员与理由（AI 建议） | AI 未启用 |
 | `list_milestones` | 无 | 目标、日期、任务数量 | — |
 | `search_artifacts` | `query`, `scope?`, `limit?` | 授权片段及版本位置 | 无权访问 |
 

@@ -237,7 +237,12 @@ export function TaskDetail({
         </div>
       )}
 
-      <TaskAi projectId={project.id} taskId={task.id} tz={tz} reviewer={reviewer && task.status === "review"} writable={writable} refresh={aiRefresh} onUseNote={setText} />
+      <TaskAi projectId={project.id} taskId={task.id} tz={tz} reviewer={reviewer && task.status === "review"} writable={writable} refresh={aiRefresh} onUseNote={setText}
+        taskStatus={task.status}
+        onUseCriteria={(texts) => setEditing([...criteria.map((c) => ({ id: c.id, text: c.text })), ...texts.map((text) => ({ text }))])}
+        onAssign={(userId) => act(base, { expected_version: v, assignee_id: userId }, "PATCH")}
+        onHelp={(userId, note) => act(`${base}/help-requests`, { user_id: userId, note })}
+      />
 
       {handoffs.length > 0 && (
         <>

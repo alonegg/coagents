@@ -154,7 +154,12 @@ Agent 工具返回精简事件：
 
 项目启用了服务端 AI 辅助时，`get_task` 会带上 `ai_briefing`：`{note, up_to_date, generated_at, state, done, open_items, review_feedback, risks, next_actions}`。它是模型根据任务历史生成的摘要，未经人工确认；`up_to_date: false` 表示任务之后又有变化。Agent 应以任务本身的内容为准，简报只用来快速定位。
 
-### 4.8 错误
+### 4.8 求助与人选建议
+
+- `request_help(task_id, user_id, note)`：请一位成员协助，不改变任务状态和租约；对方会在 Hub 收到通知（事件 `task.help_requested`）。真正卡住、需要别人先行动时，改用 `publish_blocker`。每次求助都占用对方的注意力，要少用。
+- `suggest_people(task_id, purpose)`：在项目启用 AI 辅助时，按 `assign`（谁来做）、`unblock`（谁能解除阻塞）或 `handoff`（交给谁）推荐最多 3 位成员，并附理由。建议仅供参考，候选人只会是项目中符合条件的真实成员。
+
+### 4.9 错误
 
 ```json
 { "error": { "code": "lease_invalid", "message": "…", "hint": "You no longer hold this task … claim_task again only if it is free." } }

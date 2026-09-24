@@ -30,6 +30,9 @@ export function notifyForEvent(
     case "task.rejected":
       if (typeof data.submitted_by_user === "string") recipients.add(data.submitted_by_user);
       break;
+    case "task.help_requested":
+      if (typeof data.user_id === "string") recipients.add(data.user_id);
+      break;
     case "handoff.prepared":
     case "member.role_changed":
       if (typeof data.target_user_id === "string") recipients.add(data.target_user_id);

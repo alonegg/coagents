@@ -27,7 +27,7 @@ export interface AiSettingsView {
   daily_limit: number;
 }
 
-export const AiKind = z.enum(["prereview", "briefing", "digest"]);
+export const AiKind = z.enum(["prereview", "briefing", "digest", "criteria_draft", "routing"]);
 export type AiKind = z.infer<typeof AiKind>;
 
 const Line = z.string().max(1000);
@@ -76,7 +76,46 @@ export const DigestOutput = z
   .strict();
 export type DigestOutput = z.infer<typeof DigestOutput>;
 
-export const AI_OUTPUT_SCHEMAS = { prereview: PreReviewOutput, briefing: BriefingOutput, digest: DigestOutput } as const;
+export const CriteriaDraftOutput = z
+  .object({
+    criteria: z.array(z.object({ text: z.string().max(1000), why: z.string().max(500) }).strict()).max(12),
+    questions: Lines,
+  })
+  .strict();
+export type CriteriaDraftOutput = z.infer<typeof CriteriaDraftOutput>;
+
+// Who could take a task (assign), unblock it, or receive a handoff.
+export const RoutingPurpose = z.enum(["assign", "unblock", "handoff"]);
+export type RoutingPurpose = z.infer<typeof RoutingPurpose>;
+
+export const RoutingOutput = z
+  .object({
+    candidates: z.array(z.object({ user_id: z.string().max(64), fit: z.enum(["high", "medium", "low"]), reason: z.string().max(600) }).strict()).max(3),
+    note: z.string().max(800),
+  })
+  .strict();
+export type RoutingOutput = z.infer<typeof RoutingOutput>;
+// Stored form: candidates are checked against the project's members and carry their names.
+export interface RoutingView {
+  purpose: RoutingPurpose;
+  candidates: { user_id: string; name: string; role: string; fit: "high" | "medium" | "low"; reason: string }[];
+  note: string;
+}
+
+export const AI_OUTPUT_SCHEMAS = {
+  prereview: PreReviewOutput,
+  briefing: BriefingOutput,
+  digest: DigestOutput,
+  criteria_draft: CriteriaDraftOutput,
+  routing: RoutingOutput,
+} as const;
+
+export const RoutingInput = z.object({ purpose: RoutingPurpose, request_id: z.string().min(8).max(128).optional() }).strict();
+
+// Asking a member for help on a task: an event plus a notification to that person.
+export const HelpRequestInput = z
+  .object({ user_id: z.string().min(1).max(64), note: z.string().trim().min(1).max(2000), request_id: z.string().min(8).max(128) })
+  .strict();
 
 export interface AiOutputView<T = unknown> {
   id: string;

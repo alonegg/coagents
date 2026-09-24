@@ -7,6 +7,9 @@ import {
   type AiSettingsView,
   type Criterion,
   type EvidenceItem,
+  type RoutingOutput,
+  type RoutingPurpose,
+  type RoutingView,
 } from "@coagents/contract";
 import type { z } from "zod";
 import { nowIso, type AppContext } from "./context.js";
@@ -117,6 +120,13 @@ concerns 列出验收者需要亲自核对的点。suggested_review_note 写一�
 overall：looks_complete（证据齐全）/ has_gaps（有缺口）/ insufficient（证据不足以判断）。`,
   briefing: `任务：为将要接手或继续这个任务的人或 Agent 写一份简报。
 state 用一句话说明现在的状态；done 列出已完成的内容；open_items 列出尚未完成或未解决的（包括退回意见中尚未处理的）；review_feedback 列出验收者给过的意见要点；risks 列出风险和待确认的问题；next_actions 按顺序列出下一步。`,
+  criteria_draft: `任务：为这个任务起草验收清单，供人确认后使用。
+每条都要是可以核对的陈述（能用测试、命令输出、链接、文档或人工检查判断真假），一条只说一件事；不要写“代码质量好”这类无法核对的条目。
+已有清单时只补充缺少的条目，不要重复。参考项目决策和同项目已验收任务的清单风格。why 一句话说明为什么需要这条。
+任务描述有歧义或缺信息时，把要问清楚的问题写进 questions。最多 8 条。`,
+  routing: `任务：从候选成员中推荐合适的人。purpose 表示用途：assign＝谁来执行这个任务；unblock＝谁最可能解除它的阻塞（看阻塞类型和内容，例如需要决策找 Owner/Admin，需要权限找能授权的人）；handoff＝当前执行者要交接，谁适合接手。
+只能从 candidates 中选，user_id 必须原样照抄；最多 3 人，按合适程度排序。依据候选人已验收的任务、当前负载（持有和被指派的未完成任务）、角色和最近活跃时间，reason 写具体依据。
+没有合适人选时 candidates 为空，并在 note 里说明原因。不要因为某人负载低就推荐与任务无关的人。`,
   digest: `任务：为项目成员总结这段时间的项目动态。
 headline 一句话概括；highlights 列出重要进展；needs_attention 列出需要人处理的事（待验收、阻塞、交给某人的交接等，写清涉及谁）；decisions 列出这段时间的决策；conflicts 列出决策之间、或决策与实际工作之间的矛盾，没有就留空。`,
 };
@@ -139,6 +149,8 @@ interface Job {
   requestedBy: string | null;
   // Reads the input when the job runs, after the caller's transaction has committed.
   build: () => unknown;
+  // Checks and enriches the validated model output before it is stored (e.g. drops invented ids).
+  post?: (value: unknown) => unknown;
 }
 
 // Returns the output for this input, starting a model call when there is none yet. A failed or
@@ -193,7 +205,7 @@ function run(ctx: AppContext, cfg: LlmConfig, outputId: string, job: Job): void 
     try {
       const res = await chatJson<unknown>(cfg, job.kind, SYSTEM, user, AI_OUTPUT_SCHEMAS[job.kind] as z.ZodType<unknown>);
       ledger("ok", res);
-      finish("ready", { output: res.value, model: res.model });
+      finish("ready", { output: job.post ? job.post(res.value) : res.value, model: res.model });
     } catch (err) {
       const message = err instanceof LlmError ? err.message : `unexpected: ${(err as Error).message}`;
       ledger("failed", { model: cfg.model, error: message.slice(0, 500) });
@@ -446,6 +458,104 @@ export function startDigest(ctx: AppContext, projectId: string, hours: number, r
         ...(events.length === 300 ? { note: "只包含这段时间内最近的 300 条事件" } : {}),
         current_project_decisions: decisionsForModel(ctx, projectId),
       };
+    },
+  });
+}
+
+export function startCriteriaDraft(ctx: AppContext, projectId: string, taskId: string, requestedBy: string | null): AiOutputView {
+  const t = loadTask(ctx, projectId, taskId);
+  return startAi(ctx, {
+    projectId,
+    kind: "criteria_draft",
+    subjectId: taskId,
+    inputKey: `v${t.version}`,
+    requestedBy,
+    build: () => {
+      const task = loadTask(ctx, projectId, taskId);
+      const examples = ctx.db
+        .prepare("SELECT title, criteria FROM tasks WHERE project_id = ? AND status = 'done' AND criteria != '[]' AND id != ? ORDER BY updated_at DESC LIMIT 5")
+        .all(projectId, taskId) as { title: string; criteria: string }[];
+      return {
+        task: taskCore(task),
+        accepted_tasks_in_project: examples.map((e) => ({ title: e.title, checklist: (JSON.parse(e.criteria) as Criterion[]).map((c) => clip(c.text, 300)) })),
+        current_project_decisions: decisionsForModel(ctx, projectId),
+      };
+    },
+  });
+}
+
+interface Candidate {
+  user_id: string;
+  name: string;
+  role: string;
+}
+
+function candidatesFor(ctx: AppContext, projectId: string, purpose: RoutingPurpose, requestedBy: string | null): Candidate[] {
+  const members = ctx.db
+    .prepare("SELECT m.user_id, u.display_name AS name, m.role FROM memberships m JOIN users u ON u.id = m.user_id WHERE m.project_id = ? AND u.auth_state = 'active'")
+    .all(projectId) as Candidate[];
+  // Viewers cannot work on tasks, but may be the person a blocker waits on; nobody hands off to themself.
+  return members.filter((m) => (purpose === "unblock" || m.role !== "viewer") && !(purpose === "handoff" && m.user_id === requestedBy));
+}
+
+export function startRouting(ctx: AppContext, projectId: string, taskId: string, purpose: RoutingPurpose, requestedBy: string | null): AiOutputView {
+  const t = loadTask(ctx, projectId, taskId);
+  return startAi(ctx, {
+    projectId,
+    kind: "routing",
+    subjectId: `${taskId}:${purpose}`,
+    // Load and activity change over time; suggestions are reused within the hour.
+    inputKey: `v${t.version}:t${Math.floor(ctx.clock().getTime() / 3600_000)}:${requestedBy ?? ""}`,
+    requestedBy,
+    build: () => {
+      const task = loadTask(ctx, projectId, taskId);
+      const since = new Date(ctx.clock().getTime() - 7 * 24 * 3600_000).toISOString();
+      const blocker = ctx.db
+        .prepare("SELECT data FROM events WHERE project_id = ? AND kind = 'blocker.reported' AND subject_type = 'task' AND subject_id = ? ORDER BY seq DESC LIMIT 1")
+        .get(projectId, taskId) as { data: string } | undefined;
+      const b = blocker ? (JSON.parse(blocker.data) as Record<string, unknown>) : null;
+      const candidates = candidatesFor(ctx, projectId, purpose, requestedBy).map((m) => {
+        const accepted = ctx.db
+          .prepare(
+            `SELECT DISTINCT t.title FROM task_submissions s JOIN tasks t ON t.id = s.task_id
+             WHERE t.project_id = ? AND s.submitted_by_user = ? AND s.outcome = 'accepted' ORDER BY s.reviewed_at DESC LIMIT 8`,
+          )
+          .all(projectId, m.user_id) as { title: string }[];
+        const held = (ctx.db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE project_id = ? AND status = 'in_progress' AND holder_user_id = ? AND lease_until > ?").get(projectId, m.user_id, nowIso(ctx)) as { n: number }).n;
+        const assigned = (ctx.db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE project_id = ? AND assignee_id = ? AND status IN ('todo', 'blocked', 'in_progress')").get(projectId, m.user_id) as { n: number }).n;
+        const agents = (
+          ctx.db
+            .prepare("SELECT cl.label FROM clients cl JOIN devices d ON d.id = cl.device_id WHERE cl.project_id = ? AND cl.user_id = ? AND cl.revoked_at IS NULL AND d.revoked_at IS NULL")
+            .all(projectId, m.user_id) as { label: string }[]
+        ).map((a) => clip(a.label, 60));
+        const last = ctx.db.prepare("SELECT MAX(created_at) AS at, COUNT(*) AS n FROM events WHERE project_id = ? AND actor_user_id = ? AND created_at > ?").get(projectId, m.user_id, since) as { at: string | null; n: number };
+        return {
+          user_id: m.user_id,
+          name: m.name,
+          role: m.role,
+          connected_agents: agents,
+          accepted_tasks: accepted.map((a) => clip(a.title, 120)),
+          open_load: { holding_now: held, assigned_open: assigned },
+          activity_last_7_days: { actions: last.n, last_at: last.at },
+        };
+      });
+      return {
+        purpose,
+        task: { ...taskCore(task), assignee_id: (ctx.db.prepare("SELECT assignee_id FROM tasks WHERE id = ?").get(taskId) as { assignee_id: string | null }).assignee_id },
+        ...(b && purpose === "unblock" ? { blocker: { kind: b.blocker_kind ?? "other", text: clip(b.body as string, 1500), ...(b.depends_on_task_id ? { depends_on_task_id: b.depends_on_task_id } : {}) } } : {}),
+        candidates,
+      };
+    },
+    // Only real, eligible members survive; names come from the database, not the model.
+    post: (value) => {
+      const out = value as RoutingOutput;
+      const allowed = new Map(candidatesFor(ctx, projectId, purpose, requestedBy).map((c) => [c.user_id, c]));
+      const view: RoutingView = {
+        purpose,
+        candidates: out.candidates.filter((c) => allowed.has(c.user_id)).map((c) => ({ ...c, name: allowed.get(c.user_id)!.name, role: allowed.get(c.user_id)!.role })),
+        note: out.note,
+      };
+      return view;
     },
   });
 }

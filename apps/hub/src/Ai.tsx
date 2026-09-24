@@ -1,4 +1,4 @@
-import type { AiOutputView, AiSettingsView, BriefingOutput, DigestOutput, PreReviewOutput, ProjectView } from "@coagents/contract";
+import type { AiOutputView, AiSettingsView, BriefingOutput, CriteriaDraftOutput, DigestOutput, PreReviewOutput, ProjectView, RoutingPurpose, RoutingView } from "@coagents/contract";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, formatTime } from "./api.js";
 
@@ -60,8 +60,14 @@ interface TaskAiData {
   prereview: AiOutputView<PreReviewOutput> | null;
   prereview_submission_id: string | null;
   briefing: AiOutputView<BriefingOutput> | null;
+  criteria_draft: AiOutputView<CriteriaDraftOutput> | null;
+  routing: Record<RoutingPurpose, AiOutputView<RoutingView> | null>;
 }
-const taskPending = (d: TaskAiData) => d.prereview?.status === "pending" || d.briefing?.status === "pending";
+const taskPending = (d: TaskAiData) =>
+  [d.prereview, d.briefing, d.criteria_draft, ...Object.values(d.routing ?? {})].some((o) => o?.status === "pending");
+
+const FIT: Record<string, string> = { high: "很合适", medium: "可以考虑", low: "勉强" };
+const PURPOSE: Record<RoutingPurpose, string> = { assign: "谁来做", unblock: "谁能解除阻塞", handoff: "交给谁" };
 
 export function TaskAi({
   projectId,
@@ -71,6 +77,10 @@ export function TaskAi({
   writable,
   refresh,
   onUseNote,
+  taskStatus,
+  onUseCriteria,
+  onAssign,
+  onHelp,
 }: {
   projectId: string;
   taskId: string;
@@ -79,16 +89,21 @@ export function TaskAi({
   writable: boolean;
   refresh: number;
   onUseNote: (note: string) => void;
+  taskStatus: string;
+  onUseCriteria: (texts: string[]) => void;
+  onAssign: (userId: string) => void;
+  onHelp: (userId: string, note: string) => void;
 }) {
+  const [helpNote, setHelpNote] = useState("");
   const [d, load] = usePoll<TaskAiData>(`/projects/${projectId}/tasks/${taskId}/ai`, taskPending);
   const [error, setError] = useState<string | null>(null);
   useEffect(load, [refresh, load]);
   if (!d || (!d.available && !d.prereview && !d.briefing)) return null;
 
-  async function start(path: string) {
+  async function start(path: string, body?: Record<string, unknown>) {
     setError(null);
     try {
-      await api("POST", path);
+      await api("POST", path, body);
       load();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
@@ -96,6 +111,10 @@ export function TaskAi({
   }
   const pr = d.prereview;
   const br = d.briefing;
+  const cd = d.criteria_draft;
+  const purpose: RoutingPurpose | null = taskStatus === "todo" ? "assign" : taskStatus === "blocked" ? "unblock" : null;
+  const rt = purpose ? d.routing?.[purpose] ?? null : null;
+  const canCriteria = writable && d.available && taskStatus !== "done";
   return (
     <section className="ai" aria-label="AI 辅助">
       <h3>AI 辅助 <span className="badge">未经人工确认</span></h3>
@@ -136,6 +155,69 @@ export function TaskAi({
           )}
           {reviewer && d.available && pr?.status !== "pending" && (
             <button className="link" onClick={() => start(`/projects/${projectId}/tasks/${taskId}/ai/prereview`)}>{pr ? "重新预审" : "生成预审"}</button>
+          )}
+        </div>
+      )}
+
+      {(cd || canCriteria) && (
+        <div className="ai-block">
+          <strong>验收清单草稿</strong>
+          {cd ? (
+            <>
+              <Status out={cd} what="清单草稿" />
+              {cd.status === "ready" && cd.output && (
+                <>
+                  <ol className="checklist">{cd.output.criteria.map((c, i) => <li key={i}><span className="pre">{c.text}</span> <small className="muted">— {c.why}</small></li>)}</ol>
+                  <List title="需要先问清楚" items={cd.output.questions} />
+                  {canCriteria && cd.output.criteria.length > 0 && (
+                    <button className="link" onClick={() => onUseCriteria(cd.output!.criteria.map((c) => c.text))}>加入清单（进入编辑，确认后保存）</button>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            <p className="muted">根据任务描述、项目决策和已验收任务，起草可核对的验收条目。</p>
+          )}
+          {canCriteria && cd?.status !== "pending" && (!cd || cd.status !== "ready" || !cd.current) && (
+            <button className="link" onClick={() => start(`/projects/${projectId}/tasks/${taskId}/ai/criteria`)}>{cd ? "重新起草" : "起草验收清单"}</button>
+          )}
+        </div>
+      )}
+
+      {purpose && (rt || (writable && d.available)) && (
+        <div className="ai-block">
+          <strong>推荐人选：{PURPOSE[purpose]}</strong>
+          {rt ? (
+            <>
+              <Status out={rt} what="推荐" />
+              {rt.status === "ready" && rt.output && (
+                <>
+                  {rt.output.candidates.length === 0 && <p className="muted">没有合适人选。</p>}
+                  {writable && purpose === "unblock" && rt.output.candidates.length > 0 && (
+                    <label>请求说明（先写清需要对方做什么，再点下面的“请…帮忙”）<input value={helpNote} maxLength={2000} onChange={(e) => setHelpNote(e.target.value)} placeholder="例如：需要头像上传接口和存储方案" /></label>
+                  )}
+                  <ul className="plain">
+                    {rt.output.candidates.map((c) => (
+                      <li key={c.user_id}>
+                        <strong>{c.name}</strong> <span className="badge">{FIT[c.fit]}</span> <span className="muted">{c.role}</span>
+                        <p className="pre muted">{c.reason}</p>
+                        {writable && purpose === "assign" && <button className="link" onClick={() => onAssign(c.user_id)}>指派给 {c.name}</button>}
+                        {writable && purpose === "unblock" && (
+                          <button className="link" disabled={!helpNote.trim()} onClick={() => { onHelp(c.user_id, helpNote.trim()); setHelpNote(""); }}>请 {c.name} 帮忙</button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  {rt.output.note && <p className="pre muted">{rt.output.note}</p>}
+                  <Meta out={rt} tz={tz} />
+                </>
+              )}
+            </>
+          ) : (
+            <p className="muted">根据成员已验收的工作、当前负载和活跃度给出建议，由你决定。</p>
+          )}
+          {writable && d.available && rt?.status !== "pending" && (
+            <button className="link" onClick={() => start(`/projects/${projectId}/tasks/${taskId}/ai/routing`, { purpose })}>{rt ? "重新推荐" : "推荐人选"}</button>
           )}
         </div>
       )}

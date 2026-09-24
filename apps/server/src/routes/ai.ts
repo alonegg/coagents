@@ -1,8 +1,8 @@
-import { AI_NOTICE } from "@coagents/contract";
+import { AI_NOTICE, RoutingInput, RoutingPurpose } from "@coagents/contract";
 import { Hono } from "hono";
 import { z } from "zod";
 import { requireActive, requirePermission } from "../access.js";
-import { aiAvailable, aiConfig, briefingKey, DIGEST_HOURS, digestKey, latestOutput, projectAiEnabled, startBriefing, startDigest, startPrereview } from "../ai.js";
+import { aiAvailable, aiConfig, briefingKey, DIGEST_HOURS, digestKey, latestOutput, projectAiEnabled, startBriefing, startCriteriaDraft, startDigest, startPrereview, startRouting } from "../ai.js";
 import { audit } from "../audit.js";
 import type { Env } from "../auth.js";
 import type { AppContext } from "../context.js";
@@ -11,7 +11,7 @@ import { parseBody } from "../validate.js";
 import { actorFor, checkPermission } from "./work.js";
 
 const ProjectAiInput = z.object({ enabled: z.boolean() }).strict();
-const DigestInput = z.object({ hours: z.number().int().optional() }).strict();
+const DigestInput = z.object({ hours: z.number().int().optional(), request_id: z.string().max(128).optional() }).strict();
 
 function hoursOf(v: unknown): number {
   const h = v === undefined ? 24 : Number(v);
@@ -56,7 +56,22 @@ export function aiRoutes(ctx: AppContext): Hono<Env> {
       prereview: latest ? latestOutput(ctx, access.projectId, "prereview", latest.id) : null,
       prereview_submission_id: latest?.id ?? null,
       briefing: latestOutput(ctx, access.projectId, "briefing", taskId, key),
+      criteria_draft: latestOutput(ctx, access.projectId, "criteria_draft", taskId, `v${(ctx.db.prepare("SELECT version FROM tasks WHERE id = ?").get(taskId) as { version: number }).version}`),
+      routing: Object.fromEntries(RoutingPurpose.options.map((p) => [p, latestOutput(ctx, access.projectId, "routing", `${taskId}:${p}`)])),
     });
+  });
+
+  r.post("/:id/tasks/:taskId/ai/criteria", (c) => {
+    const resolved = actorFor(ctx, c);
+    checkPermission(resolved, "task.write");
+    return c.json(startCriteriaDraft(ctx, resolved.access.projectId, c.req.param("taskId"), resolved.actor.userId), 202);
+  });
+
+  r.post("/:id/tasks/:taskId/ai/routing", async (c) => {
+    const resolved = actorFor(ctx, c);
+    checkPermission(resolved, "task.write");
+    const input = await parseBody(c, RoutingInput);
+    return c.json(startRouting(ctx, resolved.access.projectId, c.req.param("taskId"), input.purpose, resolved.actor.userId), 202);
   });
 
   r.post("/:id/tasks/:taskId/ai/briefing", (c) => {

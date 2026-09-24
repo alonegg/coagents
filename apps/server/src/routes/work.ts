@@ -2,6 +2,7 @@ import {
   CreateTaskInput,
   DecisionInput,
   EditTaskInput,
+  HelpRequestInput,
   HttpBlockerInput,
   HttpClaimInput,
   HttpReleaseInput,
@@ -18,7 +19,7 @@ import { projectAccess, requireActive, requirePermission, type ProjectAccess } f
 import { requireAuth, type Env } from "../auth.js";
 import type { Actor, AppContext } from "../context.js";
 import { listDecisions, publishDecision, publishGeneralBlocker } from "../decisions.js";
-import { ackCursor, listEvents, markStreamDelivered, MAX_EVENT_PAGE, readCursor } from "../events.js";
+import { ackCursor, appendEvent, listEvents, markStreamDelivered, MAX_EVENT_PAGE, readCursor } from "../events.js";
 import { resumeCursor, sse } from "../stream.js";
 import { describeVersions } from "../artifacts.js";
 import { sessionStillValid } from "../auth.js";
@@ -191,6 +192,25 @@ export function workRoutes(ctx: AppContext): Hono<Env> {
       }
       if (lease_token) throw invalid("lease_token needs task_id");
       return { status: 201, body: { event_seq: publishGeneralBlocker(ctx, access.projectId, actor, blocker), task: null } };
+    });
+  });
+
+  // Ask a member for help on a task without changing its state: an event and a notification.
+  r.post("/:id/tasks/:taskId/help-requests", async (c) => {
+    const input = await parseBody(c, HelpRequestInput);
+    return write(c, input, `help:${c.req.param("taskId")}`, (actor, access) => {
+      const task = getTask(ctx, access.projectId, c.req.param("taskId"));
+      if (input.user_id === actor.userId) throw invalid("Ask someone other than yourself");
+      const member = ctx.db.prepare("SELECT 1 FROM memberships WHERE project_id = ? AND user_id = ?").get(access.projectId, input.user_id);
+      if (!member) throw invalid("user_id must be a project member");
+      const seq = appendEvent(ctx, access.projectId, actor, {
+        kind: "task.help_requested",
+        subjectType: "task",
+        subjectId: task.id,
+        summary: `请求协助任务「${task.title}」`,
+        data: { user_id: input.user_id, note: input.note },
+      });
+      return { status: 201, body: { event_seq: seq } };
     });
   });
 

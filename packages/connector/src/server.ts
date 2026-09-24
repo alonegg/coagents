@@ -518,6 +518,43 @@ export function createConnectorServer(state?: ConnectorState): McpServer {
   );
 
   tool(
+    "request_help",
+    WRITE,
+    "Ask a project member for help on a task without changing its state or your lease (for blocking problems use publish_blocker). " +
+      "The person is notified in the Hub. Use sparingly: every request costs a person's attention.",
+    {
+      task_id: TaskIdArg,
+      user_id: z.string().describe("Member user_id (from get_context members or suggest_people)"),
+      note: Text("What you need from them, specifically", 2000),
+      request_id: RequestIdArg,
+    },
+    async (args, svc, cred) =>
+      svc.call("POST", `${p(cred)}/tasks/${args.task_id}/help-requests`, { user_id: args.user_id, note: args.note, ...rid(args.request_id) }),
+  );
+
+  tool(
+    "suggest_people",
+    READ,
+    "When the project uses AI assistance: suggest up to three members for a task — who could do it (assign), who could unblock it (unblock), " +
+      "or who should receive your handoff (handoff) — with reasons from their accepted work and current load. Advisory only; you decide. " +
+      "Takes up to about 45 seconds; if it is still running, call again.",
+    { task_id: TaskIdArg, purpose: z.enum(["assign", "unblock", "handoff"]) },
+    async (args, svc, cred) => {
+      type Out = { status: string; output: unknown; error: string | null };
+      const started = await svc.call<Out>("POST", `${p(cred)}/tasks/${args.task_id}/ai/routing`, { purpose: args.purpose });
+      let out: Out | null = started;
+      const deadline = Date.now() + 45_000;
+      while (out?.status === "pending" && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 2500));
+        out = (await svc.call<{ routing: Record<string, Out | null> }>("GET", `${p(cred)}/tasks/${args.task_id}/ai`)).routing[args.purpose] ?? null;
+      }
+      if (!out || out.status === "pending") return { status: "pending", hint: "Still generating; call suggest_people again shortly." };
+      if (out.status !== "ready") return { status: out.status, error: out.error };
+      return { status: "ready", note: "AI suggestion, not confirmed by a person.", ...(out.output as object) };
+    },
+  );
+
+  tool(
     "list_artifacts",
     READ,
     "List artifacts you can see in the project (title, kind, status, current version), optionally for one task.",

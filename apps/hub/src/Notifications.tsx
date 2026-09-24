@@ -18,6 +18,7 @@ const KIND_LABEL: Record<string, string> = {
   "task.assigned": "任务指派",
   "task.submitted": "待验收",
   "blocker.reported": "阻塞",
+  "task.help_requested": "请求协助",
   "handoff.prepared": "定向交接",
   "member.role_changed": "权限变化",
 };
